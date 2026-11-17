@@ -1,0 +1,3890 @@
+if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
+// BastCompta - module Suivi client
+
+const STORAGE_KEY = window.BastComptaStorageKeys?.clients || 'bastcompta-chantiers-v1';
+const DRIVE_SYNC_FILE_NAME = 'bastcompta-chantiers-sync.json';
+const DEVIS_FACTURE_STORAGE_KEY = window.BastComptaStorageKeys?.documents || 'devis-facture-style-vrai-document';
+const CRM_DRIVE_SYNC_FILE_NAME = 'bastcompta-crm-sync.json';
+const CRM_DELETED_CLIENTS_STORAGE_KEY = window.BastComptaStorageKeys?.deletedCrmClients || 'bastcompta-crm-deleted-clients-v1';
+const TERRAIN_DRAFTS_STORAGE_KEY = window.BastComptaStorageKeys?.terrainDrafts || 'bastcompta-terrain-drafts-v1';
+const TERRAIN_DRAFTS_DRIVE_FILE_NAME = 'bastcompta-terrain-drafts.json';
+
+let googleAccessToken = null;
+let selectedProjectId = '';
+let activeTab = 'summary';
+let editingProjectId = '';
+let data = loadData();
+let crmDriveClientsCache = [];
+let crmDropdownClientsCache = [];
+let terrainDraftsCache = [];
+const crmPhotoObjectUrls = new Map();
+let suiviClientLoadingCount = 0;
+let selectedSummaryYear = String(new Date().getFullYear());
+
+const statusLabels = {
+  planned: 'À suivre',
+  active: 'Actif',
+  waiting: 'En attente',
+  closed: 'Archivé',
+  cancelled: 'Annulé'
+};
+
+const statusClasses = {
+  planned: 'planned',
+  active: 'active',
+  waiting: 'waiting',
+  closed: 'closed',
+  cancelled: 'danger'
+};
+
+function notifyPortalBusinessChange(detail) {
+  try {
+    window.parent?.BastComptaPortal?.markChanged?.('suivi-client', detail);
+  } catch (error) {
+    console.warn('Signalement de modification indisponible', error);
+  }
+}
+
+function uid(prefix = 'id') {
+  return BastFileUtils.createId(prefix);
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function nowLabel() {
+  return new Date().toLocaleString('fr-BE');
+}
+
+function escapeHtml(value) {
+  return BastFormatters.escapeHtml(value);
+}
+
+function formatMoney(value) {
+  return BastFormatters.money(value);
+}
+
+function formatDate(value) {
+  return BastFormatters.date(value);
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { version: 1, projects: [] };
+    const parsed = JSON.parse(raw);
+    return normalizeData(parsed);
+  } catch {
+    return { version: 1, projects: [] };
+  }
+}
+
+function normalizeData(source) {
+  return BastProjectModel.normalizeData(source, { createId: () => uid('client'), now: () => new Date().toISOString() });
+}
+
+function clientGlobalKey(project) {
+  return BastProjectModel.clientKey(project, () => crypto.randomUUID());
+}
+
+function dedupeMoneyList(list) {
+  return BastProjectModel.dedupeMoneyList(list);
+}
+
+function mergeProjectsByClient(projects) {
+  return BastProjectModel.merge(projects, { createId: () => crypto.randomUUID(), now: () => new Date().toISOString() });
+}
+
+function normalizeProject(project) {
+  return BastProjectModel.normalize(project, { createId: () => uid('client'), now: () => new Date().toISOString() });
+}
+
+
+function readFullCrmDataFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(DEVIS_FACTURE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== 'object') return { clients: [] };
+    if (!Array.isArray(parsed.clients)) parsed.clients = [];
+    return parsed;
+  } catch (error) {
+    console.warn('Lecture CRM locale impossible.', error);
+    return { clients: [] };
+  }
+}
+
+function writeFullCrmDataToLocalStorage(crmData) {
+  const payload = crmData && typeof crmData === 'object' ? crmData : { clients: [] };
+  if (!Array.isArray(payload.clients)) payload.clients = [];
+  localStorage.setItem(DEVIS_FACTURE_STORAGE_KEY, JSON.stringify(payload, null, 2));
+  localStorage.setItem(DEVIS_FACTURE_STORAGE_KEY + '-last-save', new Date().toISOString());
+}
+
+function normalizeClientEmail(email) {
+  return String(email || '').trim().replace(/[;,\s]+$/g, '');
+}
+
+function normalizeCrmClient(client = {}) {
+  const name = String(client.name || client.clientName || '').trim();
+  if (!name) return null;
+  const ref = String(client.clientNumber || client.clientRef || '').trim();
+  const email = normalizeClientEmail(client.email || client.clientEmail || '');
+  return {
+    id: String(client.id || client.clientId || '').trim(),
+    name,
+    clientName: name,
+    clientNumber: ref,
+    clientRef: ref,
+    email,
+    clientEmail: email,
+    address: client.address || '',
+    vat: client.vat || client.clientVat || '',
+    clientVat: client.clientVat || client.vat || '',
+    phone: client.phone || '',
+    contact: client.contact || '',
+    notes: client.notes || client.description || '',
+    favorite: !!client.favorite,
+    photos: Array.isArray(client.photos) ? client.photos : [],
+    createdAt: client.createdAt || new Date().toISOString(),
+    updatedAt: client.updatedAt || '',
+    source: client.source || 'CRM'
+  };
+}
+
+function crmClientKey(client = {}) {
+  const id = String(client.id || client.clientId || '').trim();
+  const ref = String(client.clientNumber || client.clientRef || '').trim();
+  const name = normalizeLinkKey(client.name || client.clientName || '');
+  if (id) return 'id:' + id;
+  if (ref) return 'ref:' + normalizeLinkKey(ref);
+  return 'name:' + name;
+}
+
+function readDeletedCrmClientKeys() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CRM_DELETED_CLIENTS_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDeletedCrmClientKeys(keys) {
+  const unique = Array.from(new Set((Array.isArray(keys) ? keys : []).filter(Boolean)));
+  localStorage.setItem(CRM_DELETED_CLIENTS_STORAGE_KEY, JSON.stringify(unique));
+}
+
+function crmClientMatchKeys(client = {}) {
+  const normalized = normalizeCrmClient(client) || client || {};
+  const keys = [crmClientKey(normalized)];
+  const id = String(normalized.id || normalized.clientId || '').trim();
+  const ref = String(normalized.clientNumber || normalized.clientRef || '').trim();
+  const name = normalizeLinkKey(normalized.name || normalized.clientName || '');
+  const email = normalizeClientEmail(normalized.email || normalized.clientEmail || '').toLowerCase();
+  if (id) keys.push('id:' + id);
+  if (ref) keys.push('ref:' + normalizeLinkKey(ref));
+  if (name) keys.push('name:' + name);
+  if (email) keys.push('email:' + email);
+  return Array.from(new Set(keys.filter(Boolean)));
+}
+
+function isCrmClientDeleted(client = {}) {
+  const deleted = new Set(readDeletedCrmClientKeys());
+  return crmClientMatchKeys(client).some(key => deleted.has(key));
+}
+
+function rememberDeletedCrmClient(client = {}) {
+  writeDeletedCrmClientKeys([...readDeletedCrmClientKeys(), ...crmClientMatchKeys(client)]);
+}
+
+function forgetDeletedCrmClient(client = {}) {
+  const keys = new Set(crmClientMatchKeys(client));
+  writeDeletedCrmClientKeys(readDeletedCrmClientKeys().filter(key => !keys.has(key)));
+}
+
+function filterDeletedCrmClients(clients = []) {
+  return (Array.isArray(clients) ? clients : []).filter(client => !isCrmClientDeleted(client));
+}
+
+function mergeCrmClientLists(...lists) {
+  const map = new Map();
+  lists.flat().forEach(raw => {
+    const client = normalizeCrmClient(raw);
+    if (!client) return;
+    const key = crmClientKey(client);
+    if (!key || key === 'name:') return;
+    const previous = map.get(key) || {};
+    map.set(key, {
+      ...previous,
+      ...client,
+      id: client.id || previous.id,
+      name: client.name || previous.name,
+      clientName: client.clientName || client.name || previous.clientName,
+      clientNumber: client.clientNumber || previous.clientNumber,
+      clientRef: client.clientRef || client.clientNumber || previous.clientRef,
+      email: client.email || previous.email,
+      clientEmail: client.clientEmail || client.email || previous.clientEmail,
+      address: client.address || previous.address,
+      vat: client.vat || previous.vat,
+      clientVat: client.clientVat || client.vat || previous.clientVat,
+      phone: client.phone || previous.phone,
+      contact: client.contact || previous.contact,
+      notes: client.notes || previous.notes,
+      favorite: !!(client.favorite || previous.favorite),
+      source: client.source || previous.source || 'CRM',
+      updatedAt: client.updatedAt || previous.updatedAt,
+      createdAt: previous.createdAt || client.createdAt
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+    const byNumber = String(a.clientNumber || '999999').localeCompare(String(b.clientNumber || '999999'), 'fr', { numeric: true, sensitivity: 'base' });
+    if (byNumber !== 0) return byNumber;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base' });
+  });
+}
+
+function readCrmClientsFromLocalStorage() {
+  const parsed = readFullCrmDataFromLocalStorage();
+  return Array.isArray(parsed.clients) ? parsed.clients : [];
+}
+
+function getAllCrmClients() {
+  return filterDeletedCrmClients(mergeCrmClientLists(readCrmClientsFromLocalStorage(), crmDriveClientsCache));
+}
+
+function findCrmClientForProject(project) {
+  if (!project) return null;
+  const candidates = getAllCrmClients();
+  const projectKeys = [
+    project.clientId ? 'id:' + String(project.clientId).trim() : '',
+    project.clientRef ? 'ref:' + normalizeLinkKey(project.clientRef) : '',
+    (project.clientName || project.title) ? 'name:' + normalizeLinkKey(project.clientName || project.title) : ''
+  ].filter(Boolean);
+  return candidates.find(client => projectKeys.includes(crmClientKey(client))) || null;
+}
+
+function hydrateProjectWithCrm(project) {
+  if (!project) return null;
+  const crm = findCrmClientForProject(project);
+  if (!crm) return project;
+  return {
+    ...project,
+    title: crm.name || project.title,
+    clientId: crm.id || project.clientId,
+    clientName: crm.name || project.clientName || project.title,
+    clientRef: crm.clientNumber || crm.clientRef || project.clientRef,
+    email: crm.email || project.email,
+    clientEmail: crm.clientEmail || crm.email || project.clientEmail,
+    vat: crm.vat || project.vat,
+    clientVat: crm.clientVat || crm.vat || project.clientVat,
+    phone: crm.phone || project.phone,
+    contact: crm.contact || project.contact,
+    address: crm.address || project.address,
+    description: crm.notes || project.description,
+    favorite: !!crm.favorite,
+    photos: Array.isArray(crm.photos) ? crm.photos : (Array.isArray(project.photos) ? project.photos : []),
+    crmSource: crm.source || 'CRM'
+  };
+}
+
+function syncProjectIdentityFromCrm(project, crmClient) {
+  const crm = normalizeCrmClient(crmClient);
+  if (!project || !crm) return project;
+  project.clientId = crm.id || project.clientId || '';
+  project.title = crm.name;
+  project.clientName = crm.name;
+  project.clientRef = crm.clientNumber || crm.clientRef || '';
+  project.email = crm.email || '';
+  project.clientEmail = crm.clientEmail || crm.email || '';
+  project.vat = crm.vat || '';
+  project.clientVat = crm.clientVat || crm.vat || '';
+  project.phone = crm.phone || '';
+  project.contact = crm.contact || '';
+  project.address = crm.address || '';
+  project.description = crm.notes || project.description || '';
+  project.updatedAt = new Date().toISOString();
+  return project;
+}
+
+function getOrCreateProjectForCrmClient(crmClient) {
+  const crm = normalizeCrmClient(crmClient);
+  if (!crm) return null;
+  const key = crmClientKey(crm);
+  let project = data.projects.find(item => {
+    const itemKey = clientGlobalKey(item);
+    const altKeys = [
+      item.clientId ? 'id:' + String(item.clientId).trim() : '',
+      item.clientRef ? 'ref:' + normalizeLinkKey(item.clientRef) : '',
+      item.clientName ? 'name:' + normalizeLinkKey(item.clientName) : ''
+    ];
+    return itemKey === key || altKeys.includes(key);
+  });
+  if (!project) {
+    project = normalizeProject({
+      id: uid('suivi'),
+      status: 'planned',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      timeline: [{ id: uid('evt'), date: new Date().toISOString(), text: 'Fiche de suivi créée depuis le CRM.' }]
+    });
+    data.projects.unshift(project);
+  }
+  syncProjectIdentityFromCrm(project, crm);
+  return project;
+}
+
+function renderCrmClientDropdown() {
+  const select = document.getElementById('crmClientSelect');
+  if (!select) return;
+  const previous = select.value;
+  const search = document.getElementById('searchInput')?.value?.trim().toLowerCase() || '';
+  const allClients = getAllCrmClients();
+  const clients = allClients.filter(client => {
+    const haystack = [client.clientNumber, client.name, client.email, client.phone, client.address, client.vat].join(' ').toLowerCase();
+    return !search || haystack.includes(search);
+  });
+  crmDropdownClientsCache = clients;
+  select.innerHTML = '<option value="">Choisir un client du CRM...</option>' + clients.map(client => {
+    const key = crmClientKey(client);
+    const label = [client.clientNumber ? 'N° ' + client.clientNumber : '', client.name, client.email || client.address || ''].filter(Boolean).join(' · ');
+    return `<option value="${escapeAttr(key)}">${escapeHtml(label)}</option>`;
+  }).join('');
+  if (previous && clients.some(client => crmClientKey(client) === previous)) select.value = previous;
+}
+
+async function openCrmClientFromSelect() {
+  const select = document.getElementById('crmClientSelect');
+  const key = select?.value || '';
+  if (!key) return;
+  const client = crmDropdownClientsCache.find(item => crmClientKey(item) === key) || getAllCrmClients().find(item => crmClientKey(item) === key);
+  if (!client) return;
+  const project = getOrCreateProjectForCrmClient(client);
+  if (!project) return;
+  selectedProjectId = project.id;
+  activeTab = 'summary';
+  await saveData(false);
+  await autoLoadClientDocuments(false);
+  render();
+}
+
+async function saveCrmDataToDrive(crmData, showToast = false) {
+  if (!googleAccessToken) return false;
+  try {
+    const content = JSON.stringify(crmData, null, 2);
+    const metadata = { name: CRM_DRIVE_SYNC_FILE_NAME, mimeType: 'application/json', parents: ['appDataFolder'] };
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `name='${CRM_DRIVE_SYNC_FILE_NAME}' and trashed=false`,
+      fields: 'files(id,name,modifiedTime)'
+    }, false);
+    const existing = list?.result?.files?.[0];
+    const boundary = '-------bastcompta-crm-' + Date.now();
+    const body = existing
+      ? content
+      : `${boundary ? '--' + boundary : ''}\nContent-Type: application/json; charset=UTF-8\n\n${JSON.stringify(metadata)}\n--${boundary}\nContent-Type: application/json\n\n${content}\n--${boundary}--`;
+    const response = await fetch(existing
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: existing ? 'PATCH' : 'POST',
+      headers: existing
+        ? { Authorization: `Bearer ${googleAccessToken}`, 'Content-Type': 'application/json' }
+        : { Authorization: `Bearer ${googleAccessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+    if (!response.ok) throw new Error('Drive CRM status ' + response.status);
+    if (showToast) notify('CRM sauvegardé localement et sur Google Drive.');
+    return true;
+  } catch (error) {
+    console.warn('Sauvegarde CRM Drive ignorée.', error);
+    if (showToast) notify('CRM sauvegardé localement. Google Drive non disponible pour le moment.');
+    return false;
+  }
+}
+
+async function refreshCrmClientDropdown(showToast = false) {
+  if (googleAccessToken) {
+    try {
+      const list = await driveFilesList({
+        spaces: 'appDataFolder',
+        q: `name='${CRM_DRIVE_SYNC_FILE_NAME}' and trashed=false`,
+        fields: 'files(id,name,modifiedTime)'
+      }, false);
+      const file = list?.result?.files?.[0];
+      if (file) {
+        const parsed = await fetchDriveJson(file.id);
+        const driveClients = Array.isArray(parsed?.clients) ? parsed.clients.map(client => ({ ...client, source: 'CRM Drive' })) : [];
+        const filteredDriveClients = filterDeletedCrmClients(driveClients);
+        crmDriveClientsCache = filteredDriveClients;
+        if (driveClients.length !== filteredDriveClients.length && parsed && typeof parsed === 'object') {
+          parsed.clients = filteredDriveClients;
+          await saveCrmDataToDrive(parsed, false);
+        }
+      }
+    } catch (error) {
+      console.warn('Lecture CRM Drive ignorée.', error);
+    }
+  }
+  renderCrmClientDropdown();
+  if (showToast) notify(`${getAllCrmClients().length} client(s) disponibles dans le CRM.`);
+}
+
+function openCrmClientModalFromProject(projectId = selectedProjectId) {
+  const project = data.projects.find(item => item.id === projectId) || getProject();
+  openCrmClientModal(findCrmClientForProject(project) || project || {});
+}
+
+function openCrmClientModal(client = {}) {
+  const normalized = normalizeCrmClient(client) || { id: '', name: '', clientNumber: '', email: '', address: '', vat: '', phone: '', contact: '', notes: '' };
+  openGenericModal(`
+        <div class="modal-head">
+          <div>
+            <h2>${normalized.id || normalized.name ? 'Modifier client CRM' : 'Nouveau client CRM'}</h2>
+            <div class="hint">Ce formulaire écrit dans le CRM officiel utilisé par la Gestion commerciale (<strong>${escapeHtml(CRM_DRIVE_SYNC_FILE_NAME)}</strong> si Drive est connecté).</div>
+          </div>
+          <button class="small ghost" onclick="closeGenericModal()">✕</button>
+        </div>
+        <input id="crmFormOriginalKey" type="hidden" value="${escapeAttr(crmClientKey(normalized))}">
+        <input id="crmFormId" type="hidden" value="${escapeAttr(normalized.id || '')}">
+        <div class="grid-2">
+          <div class="form-row"><label>Nom client</label><input id="crmFormName" value="${escapeAttr(normalized.name || '')}" placeholder="Nom du client"></div>
+          <div class="form-row"><label>N° client / référence</label><input id="crmFormClientNumber" value="${escapeAttr(normalized.clientNumber || normalized.clientRef || '')}" placeholder="Optionnel"></div>
+          <div class="form-row"><label>Email</label><input id="crmFormEmail" value="${escapeAttr(normalized.email || normalized.clientEmail || '')}" placeholder="email@exemple.be"></div>
+          <div class="form-row"><label>Téléphone</label><input id="crmFormPhone" value="${escapeAttr(normalized.phone || '')}" placeholder="Téléphone"></div>
+          <div class="form-row"><label>TVA</label><input id="crmFormVat" value="${escapeAttr(normalized.vat || normalized.clientVat || '')}" placeholder="BE..."></div>
+          <div class="form-row"><label>Contact</label><input id="crmFormContact" value="${escapeAttr(normalized.contact || '')}" placeholder="Personne de contact"></div>
+        </div>
+        <div class="form-row"><label>Adresse</label><textarea id="crmFormAddress" placeholder="Adresse complète">${escapeHtml(normalized.address || '')}</textarea></div>
+        <div class="form-row"><label>Notes CRM</label><textarea id="crmFormNotes" placeholder="Notes internes">${escapeHtml(normalized.notes || '')}</textarea></div>
+        <div class="modal-actions" style="justify-content:space-between; align-items:center;">
+          <div>
+            ${normalized.id || normalized.name ? `<button class="danger" onclick="deleteCrmClientFromModal()">Supprimer le client</button>` : ''}
+          </div>
+          <div class="inline-actions">
+            <button class="ghost" onclick="closeGenericModal()">Annuler</button>
+            <button class="primary" onclick="submitCrmClientForm()">Enregistrer dans le CRM</button>
+          </div>
+        </div>
+      `);
+}
+
+async function deleteCrmClientFromModal() {
+  const originalKey = document.getElementById('crmFormOriginalKey')?.value || '';
+  const existingId = document.getElementById('crmFormId')?.value?.trim() || '';
+  const name = document.getElementById('crmFormName')?.value?.trim() || 'ce client';
+  const candidate = {
+    id: existingId,
+    name,
+    clientNumber: document.getElementById('crmFormClientNumber')?.value?.trim() || '',
+    email: normalizeClientEmail(document.getElementById('crmFormEmail')?.value || ''),
+    address: document.getElementById('crmFormAddress')?.value?.trim() || '',
+    vat: document.getElementById('crmFormVat')?.value?.trim() || '',
+    phone: document.getElementById('crmFormPhone')?.value?.trim() || '',
+    contact: document.getElementById('crmFormContact')?.value?.trim() || '',
+    notes: document.getElementById('crmFormNotes')?.value?.trim() || ''
+  };
+
+  if (!originalKey && !existingId && !name) {
+    notify('Ce client n’est pas encore enregistré dans le CRM.');
+    return;
+  }
+
+  const project = getProject();
+  const hasLinkedData = !!project && (
+    (project.linkedQuotes || []).length ||
+    (project.linkedInvoices || []).length ||
+    (project.linkedReminders || []).length ||
+    (project.costs || []).length ||
+    (project.documents || []).length ||
+    (project.tasks || []).length ||
+    (project.notes || []).length
+  );
+
+  const warning = hasLinkedData
+    ? `Supprimer le client CRM "${name}" ?\n\nSes données de suivi/documents liés restent conservés, mais le client disparaîtra de la liste CRM.`
+    : `Supprimer définitivement le client CRM "${name}" ?`;
+
+  if (!confirm(warning)) return;
+  notifyPortalBusinessChange('Client CRM supprimé');
+
+  const crmData = readFullCrmDataFromLocalStorage();
+  const clients = Array.isArray(crmData.clients) ? crmData.clients : [];
+  crmData.clients = filterDeletedCrmClients(clients).filter(client => {
+    const normalized = normalizeCrmClient(client) || client;
+    const keys = crmClientMatchKeys(normalized);
+    const candidateKeys = crmClientMatchKeys(candidate);
+    return !(
+      (existingId && String(client.id || '').trim() === existingId) ||
+      (originalKey && crmClientKey(normalized) === originalKey) ||
+      candidateKeys.some(key => keys.includes(key))
+    );
+  });
+
+  rememberDeletedCrmClient(candidate);
+  writeFullCrmDataToLocalStorage(crmData);
+  crmDriveClientsCache = filterDeletedCrmClients(crmDriveClientsCache);
+
+  if (project && (
+    (existingId && String(project.clientId || '').trim() === existingId) ||
+    (project.clientRef && originalKey === 'ref:' + normalizeLinkKey(project.clientRef)) ||
+    (project.clientName && originalKey === 'name:' + normalizeLinkKey(project.clientName))
+  )) {
+    addTimeline(project, 'Client supprimé du CRM officiel depuis Suivi client.');
+    saveLocalOnly();
+  }
+
+  await saveCrmDataToDrive(crmData, false);
+  closeGenericModal();
+  await refreshCrmClientDropdown(false);
+  selectedProjectId = '';
+  render();
+  notify(googleAccessToken ? 'Client CRM supprimé localement et sur Google Drive.' : 'Client CRM supprimé localement. La suppression sera conservée et appliquée à Drive à la prochaine connexion.');
+}
+
+async function submitCrmClientForm() {
+  const name = document.getElementById('crmFormName').value.trim();
+  if (!name) { notify('Le nom du client est obligatoire.'); return; }
+  const crmData = readFullCrmDataFromLocalStorage();
+  const originalKey = document.getElementById('crmFormOriginalKey').value;
+  const existingId = document.getElementById('crmFormId').value.trim();
+  const payload = {
+    id: existingId || uid('client'),
+    name,
+    clientNumber: document.getElementById('crmFormClientNumber').value.trim(),
+    email: normalizeClientEmail(document.getElementById('crmFormEmail').value),
+    address: document.getElementById('crmFormAddress').value.trim(),
+    vat: document.getElementById('crmFormVat').value.trim(),
+    phone: document.getElementById('crmFormPhone').value.trim(),
+    contact: document.getElementById('crmFormContact').value.trim(),
+    notes: document.getElementById('crmFormNotes').value.trim(),
+    favorite: false,
+    createdAt: existingId ? undefined : new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  const clients = Array.isArray(crmData.clients) ? crmData.clients : [];
+  const index = clients.findIndex(client => {
+    const normalized = normalizeCrmClient(client) || client;
+    return (existingId && String(client.id || '').trim() === existingId) || crmClientKey(normalized) === originalKey;
+  });
+  if (index >= 0) {
+    clients[index] = { ...clients[index], ...payload, createdAt: clients[index].createdAt || payload.createdAt || new Date().toISOString() };
+  } else {
+    clients.push({ ...payload, createdAt: payload.createdAt || new Date().toISOString() });
+  }
+  notifyPortalBusinessChange(index >= 0 ? 'Client CRM modifié' : 'Client CRM créé');
+  crmData.clients = clients;
+  forgetDeletedCrmClient(payload);
+  writeFullCrmDataToLocalStorage(crmData);
+  crmDriveClientsCache = filterDeletedCrmClients(mergeCrmClientLists(crmDriveClientsCache, [payload]));
+  const project = getOrCreateProjectForCrmClient(payload);
+  if (project) {
+    selectedProjectId = project.id;
+    addTimeline(project, index >= 0 ? 'Identité CRM modifiée depuis Suivi client.' : 'Client CRM créé depuis Suivi client.');
+    saveLocalOnly();
+  }
+  await saveCrmDataToDrive(crmData, false);
+  closeGenericModal();
+  await refreshCrmClientDropdown(false);
+  render();
+  notify('Client CRM enregistré.');
+}
+
+async function autoLoadClientDocuments(showToast = false) {
+  const project = hydrateProjectWithCrm(getProject());
+  if (!project) return;
+  const hydrated = hydrateProjectWithCrm(project);
+  const localDocs = getLocalCrmDocumentsForProject(hydrated);
+  const driveDocs = await getDriveCrmDocumentsForProject(hydrated);
+  // Un export Drive ancien ne doit pas réécrire le montant du document local corrigé.
+  const localKeys = new Set(localDocs.map(doc => `${doc.key}:${doc.ref}`));
+  crmDocumentLinkCache = dedupeCrmDocs([...localDocs, ...driveDocs.filter(doc => !localKeys.has(`${doc.key}:${doc.ref}`))]);
+  if (crmDocumentLinkCache.length) {
+    for (const doc of crmDocumentLinkCache) {
+      await toggleCrmDocumentLink(doc.key, doc.ref, true, project.id, doc);
+    }
+    if (showToast) notify('Documents client chargés / mis à jour.');
+  }
+}
+
+function getProject() {
+  return data.projects.find(project => project.id === selectedProjectId) || null;
+}
+
+function saveLocalOnly() {
+  const payload = JSON.stringify(data, null, 2);
+  localStorage.setItem(STORAGE_KEY, payload);
+  localStorage.setItem(STORAGE_KEY + '-last-save', new Date().toISOString());
+  return true;
+}
+
+async function saveData(showToast = true) {
+  const saveButton = document.getElementById('saveButton');
+  const previousLabel = saveButton ? saveButton.textContent : '';
+  try {
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = 'Sauvegarde…';
+    }
+
+    const now = new Date().toISOString();
+    data.projects.forEach(project => project.updatedAt = now);
+    saveLocalOnly();
+
+    let driveOk = false;
+    if (googleAccessToken) {
+      driveOk = await saveSyncToDrive(false);
+    }
+
+    if (showToast) {
+      notify(driveOk
+        ? 'Suivi client sauvegardé localement et sur Google Drive.'
+        : 'Suivi client sauvegardé localement.' + (googleAccessToken ? ' Google Drive non disponible pour le moment.' : ''));
+    }
+
+    render();
+    return true;
+  } catch (error) {
+    console.error('Sauvegarde suivi client impossible', error);
+    if (showToast) notify('Erreur : la sauvegarde du suivi client n’a pas pu être effectuée.');
+    return false;
+  } finally {
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = previousLabel || 'Sauvegarder';
+    }
+  }
+}
+
+function addTimeline(project, text) {
+  project.timeline.unshift({
+    id: uid('evt'),
+    date: new Date().toISOString(),
+    text
+  });
+  project.timeline = project.timeline.slice(0, 80);
+}
+
+function projectMoneyValue(item) {
+  return BastProjectFinance.moneyValue(item);
+}
+
+function projectWorkValue(item) {
+  return BastProjectFinance.workValue(item);
+}
+
+function projectSupplyValue(item) {
+  return BastProjectFinance.supplyCost(item);
+}
+
+function projectSupplySaleValue(item) {
+  return BastProjectFinance.supplySale(item);
+}
+
+function extractItemYear(item) {
+  return BastProjectFinance.itemYear(item);
+}
+
+function itemMatchesSummaryYear(item, year = selectedSummaryYear) {
+  return BastProjectFinance.matchesYear(item, year);
+}
+
+function projectTotals(project, year = 'all') {
+  return BastProjectFinance.totals(project, year);
+}
+
+function sum(values) {
+  return BastProjectFinance.sum(values);
+}
+
+function render() {
+  renderMetrics();
+  renderCrmClientDropdown();
+  renderProjectList();
+  renderMain();
+}
+
+function getSummaryYears() {
+  const years = new Set([String(new Date().getFullYear())]);
+
+  data.projects.forEach(project => {
+    [
+      ...(project.linkedInvoices || []),
+      ...(project.costs || []),
+      ...(project.documents || [])
+    ].forEach(item => {
+      const year = extractItemYear(item);
+      if (year) years.add(year);
+    });
+  });
+
+  return Array.from(years).sort((a, b) => Number(b) - Number(a));
+}
+
+function renderSummaryYearFilter() {
+  const select = document.getElementById('summaryYearFilter');
+  if (!select) return;
+
+  const years = getSummaryYears();
+  if (selectedSummaryYear !== 'all' && !years.includes(selectedSummaryYear)) {
+    years.push(selectedSummaryYear);
+    years.sort((a, b) => Number(b) - Number(a));
+  }
+
+  select.innerHTML = [
+    ...years.map(year => `<option value="${year}">${year}</option>`),
+    '<option value="all">Toutes années</option>'
+  ].join('');
+  select.value = selectedSummaryYear;
+}
+
+function setSummaryYear(year) {
+  selectedSummaryYear = year === 'all' ? 'all' : String(year || new Date().getFullYear());
+  renderMetrics();
+}
+
+function renderMetrics() {
+  renderSummaryYearFilter();
+
+  const totals = data.projects.reduce((acc, project) => {
+    const t = projectTotals(project, selectedSummaryYear);
+    acc.invoices += t.invoices;
+    acc.costs += t.costs;
+    acc.margin += t.margin;
+    acc.docs += (project.documents || []).filter(item => itemMatchesSummaryYear(item, selectedSummaryYear)).length;
+    return acc;
+  }, { invoices: 0, costs: 0, margin: 0, docs: 0 });
+
+  const margin = totals.margin;
+  const rate = totals.invoices > 0 ? (margin / totals.invoices) * 100 : 0;
+  const periodLabel = selectedSummaryYear === 'all' ? 'toutes années' : selectedSummaryYear;
+
+  document.getElementById('metricProjects').textContent = getAllCrmClients().length;
+  document.getElementById('metricProjectsSub').textContent = 'base officielle';
+  document.getElementById('metricInvoices').textContent = formatMoney(totals.invoices);
+  document.getElementById('metricCosts').textContent = formatMoney(totals.costs);
+  document.getElementById('metricMargin').textContent = formatMoney(margin);
+  document.getElementById('metricMargin').className = 'metric-value ' + (margin >= 0 ? 'margin-positive' : 'margin-negative');
+  document.getElementById('metricMarginRate').textContent = rate.toFixed(1).replace('.', ',') + '% · ' + periodLabel;
+  document.getElementById('metricDocs').textContent = totals.docs;
+}
+
+function getFilteredProjects() {
+  const search = document.getElementById('searchInput')?.value?.trim().toLowerCase() || '';
+  const status = document.getElementById('statusFilter')?.value || '';
+
+  return data.projects.filter(project => {
+    const haystack = [
+      project.title,
+      project.clientName,
+      project.clientRef,
+      project.address,
+      project.description
+    ].join(' ').toLowerCase();
+
+    return (!search || haystack.includes(search)) && (!status || project.status === status);
+  }).sort((a, b) => {
+    if (a.status === 'active' && b.status !== 'active') return -1;
+    if (b.status === 'active' && a.status !== 'active') return 1;
+    return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+  });
+}
+
+function renderProjectList() {
+  const list = document.getElementById('projectList');
+  if (list) list.innerHTML = '';
+}
+
+function selectProject(id) {
+  selectedProjectId = id;
+  activeTab = 'summary';
+  render();
+}
+
+function renderMain() {
+  const container = document.getElementById('mainContent');
+  const storedProject = getProject();
+
+  if (!storedProject) {
+    container.innerHTML = '';
+    return;
+  }
+
+  ensureLocalTerrainDraftLinked(storedProject);
+  const project = hydrateProjectWithCrm(storedProject);
+  const t = projectTotals(project);
+
+  container.innerHTML = `
+        <div class="hero">
+          <div class="hero-top">
+            <div>
+              <h2>${escapeHtml(project.clientName || project.title || 'Client sans nom')}</h2>
+              <div class="hero-meta">
+                <strong>${escapeHtml(project.clientRef ? 'N° client ' + project.clientRef : 'Référence non définie')}</strong><br>
+                ${escapeHtml(project.address || 'Adresse non définie').replace(/\n/g, '<br>')}
+              </div>
+            </div>
+            <div class="inline-actions">
+              <button class="small" onclick="openCrmDocumentLinkModal()">Charger docs client</button>
+              <button class="small" onclick="openCrmClientModalFromProject('${project.id}')">Modifier CRM</button>
+            </div>
+          </div>
+
+          <div class="grid-3">
+            <div class="mini-stat"><span>CA facturé</span><strong>${formatMoney(t.invoices)}</strong></div>
+            <div class="mini-stat"><span>Coûts</span><strong>${formatMoney(t.costs)}</strong></div>
+            <div class="mini-stat"><span>Marge réelle</span><strong class="${t.margin >= 0 ? 'margin-positive' : 'margin-negative'}">${formatMoney(t.margin)}</strong></div>
+            <div class="mini-stat"><span>Taux marge</span><strong>${t.marginRate.toFixed(1).replace('.', ',')}%</strong></div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          ${tabButton('summary', 'Résumé')}
+          ${tabButton('quotes', 'Devis')}
+          ${tabButton('drafts', 'Brouillons')}
+          ${tabButton('finance', 'Factures / Coûts')}
+          ${tabButton('documents', 'Documents')}
+          ${tabButton('photos', 'Photos')}
+          ${tabButton('tasks', 'Tâches')}
+          ${tabButton('notes', 'Remarques')}
+          ${tabButton('history', 'Historique')}
+        </div>
+
+        <div class="main-body">
+          ${renderTabPages(project)}
+        </div>
+      `;
+  if (activeTab === 'photos') setTimeout(() => hydrateCrmPhotoImages().catch(console.warn), 0);
+}
+
+function tabButton(key, label) {
+  return `<button class="tab ${activeTab === key ? 'active' : ''}" onclick="setTab('${key}')">${label}</button>`;
+}
+
+async function setTab(tab) {
+  activeTab = tab;
+  if (tab === 'drafts' && googleAccessToken) {
+    await loadTerrainDraftsFromDrive();
+  }
+  renderMain();
+}
+
+function renderTabPages(project) {
+  return `
+        <section class="tab-page ${activeTab === 'summary' ? 'active' : ''}">
+          ${renderSummaryTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'quotes' ? 'active' : ''}">
+          ${renderQuotesTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'drafts' ? 'active' : ''}">
+          ${renderDraftsTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'finance' ? 'active' : ''}">
+          ${renderFinanceTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'documents' ? 'active' : ''}">
+          ${renderDocumentsTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'photos' ? 'active' : ''}">
+          ${renderPhotosTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'tasks' ? 'active' : ''}">
+          ${renderTasksTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'notes' ? 'active' : ''}">
+          ${renderNotesTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'history' ? 'active' : ''}">
+          ${renderHistoryTab(project)}
+        </section>
+      `;
+}
+
+function renderSummaryTab(project) {
+  const t = projectTotals(project);
+
+  return `
+        <div class="grid-2">
+          <div class="form-card">
+            <div class="section-head">
+              <h3 class="section-title">Informations client</h3>
+              <button class="small" onclick="openCrmDocumentLinkModal()">Charger docs client</button>
+            </div>
+            <div class="grid-2">
+              <div class="mini-stat"><span>Client</span><strong>${escapeHtml(project.clientName || '—')}</strong></div>
+              <div class="mini-stat"><span>Référence client</span><strong>${escapeHtml(project.clientRef || '—')}</strong></div>
+              <div class="mini-stat" style="grid-column: 1 / -1;"><span>Email</span><strong style="overflow-wrap:anywhere; word-break:break-word;">${escapeHtml(project.clientEmail || project.email || '—')}</strong></div>
+              <div class="mini-stat"><span>TVA</span><strong>${escapeHtml(project.clientVat || project.vat || '—')}</strong></div>
+              <div class="mini-stat"><span>Contact</span><strong>${escapeHtml(project.contact || '—')}</strong></div>
+              <div class="mini-stat" style="grid-column: 1 / -1;"><span>Téléphone</span><strong>${escapeHtml(project.phone || '—')}</strong></div>
+            </div>
+            <div class="hint"><strong>Adresse :</strong><br>${escapeHtml(project.address || 'Adresse non définie').replace(/\n/g, '<br>')}</div>
+            <div class="hint"><strong>Notes CRM :</strong><br>${escapeHtml(project.description || 'Aucune note CRM.').replace(/\n/g, '<br>')}</div>
+          </div>
+
+          <div class="form-card">
+            <div class="section-head">
+              <h3 class="section-title">Lecture rapide</h3>
+            </div>
+            <div class="grid-2">
+              <div class="mini-stat"><span>Factures liées</span><strong>${project.linkedInvoices.length}</strong></div>
+              <div class="mini-stat"><span>Rappels liés</span><strong>${(project.linkedReminders || []).length}</strong></div>
+              <div class="mini-stat"><span>Coûts liés</span><strong>${project.costs.length}</strong></div>
+              <div class="mini-stat"><span>Documents</span><strong>${project.documents.length}</strong></div>
+              <div class="mini-stat"><span>Tâches ouvertes</span><strong>${project.tasks.filter(task => !task.done).length}</strong></div>
+            </div>
+            <div class="hint">
+              Objectif : regrouper toutes les factures, coûts, documents et remarques de ce client pour voir ce qui est réellement gagné.
+            </div>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="section-head">
+            <h3 class="section-title">Marge client</h3>
+          </div>
+          <div class="grid-3">
+            <div class="mini-stat"><span>CA facturé</span><strong>${formatMoney(t.invoices)}</strong></div>
+            <div class="mini-stat"><span>Prestations facturées</span><strong>${formatMoney(t.invoiceWorkTotal)}</strong></div>
+            <div class="mini-stat"><span>Fournitures factures</span><strong>${formatMoney(t.invoiceSupplyCosts)}</strong></div>
+            <div class="mini-stat"><span>Coûts manuels</span><strong>${formatMoney(t.manualCosts)}</strong></div>
+            <div class="mini-stat"><span>Marge réelle</span><strong class="${t.margin >= 0 ? 'margin-positive' : 'margin-negative'}">${formatMoney(t.margin)}</strong></div>
+            <div class="mini-stat"><span>Taux marge</span><strong>${t.marginRate.toFixed(1).replace('.', ',')}%</strong></div>
+          </div>
+        </div>
+      `;
+}
+
+
+function ensureLocalTerrainDraftLinked(project) {
+  const localData = loadDevisFactureData();
+  const doc = localData?.quote;
+  if (!doc || !doc.transferredFromTerrain || doc.documentNumber) return;
+  const entry = buildCrmDocEntry('quote', doc, 'Mode terrain');
+  if (!entry || !clientMatchesProject(project, entry)) return;
+  if (!Array.isArray(project.linkedQuotes)) project.linkedQuotes = [];
+  const stableKey = crmDocStableKey('quote', entry.ref);
+  const payload = {
+    id: `quote-${entry.ref}`,
+    documentUid: stableKey,
+    date: entry.date,
+    ref: entry.ref,
+    displayRef: entry.displayRef,
+    description: entry.description,
+    amount: entry.clientHtva || entry.htva || 0,
+    clientHtva: entry.clientHtva || entry.htva || 0,
+    totalClientHtva: entry.clientHtva || entry.htva || 0,
+    workHtva: entry.workHtva || entry.htva || 0,
+    htva: entry.htva || 0,
+    vat: entry.vat || 0,
+    tvac: entry.tvac || 0,
+    suppliesCost: entry.suppliesCost || 0,
+    suppliesCostHtva: entry.suppliesCostHtva || 0,
+    suppliesHtva: entry.suppliesHtva || 0,
+    suppliesSaleHtva: entry.suppliesSaleHtva || 0,
+    source: entry.source,
+    docKey: 'quote',
+    suiviClientId: project.id,
+    chantierId: project.id,
+    clientId: entry.clientId,
+    clientName: entry.clientName,
+    clientRef: entry.clientRef,
+    siteName: entry.siteName || project.title,
+    rawDocument: entry.rawDocument || doc
+  };
+  const existing = project.linkedQuotes.find(item => item.documentUid === stableKey || (item.docKey === 'quote' && normalizeLinkKey(item.ref) === normalizeLinkKey(entry.ref)));
+  if (existing) Object.assign(existing, payload);
+  else project.linkedQuotes.unshift(payload);
+  project.linkedQuotes = dedupeMoneyList(project.linkedQuotes);
+  project.updatedAt = new Date().toISOString();
+  saveLocalOnly();
+}
+
+function crmPhotoDate(value) {
+  const date = new Date(value || '');
+  return Number.isNaN(date.getTime()) ? 'Date inconnue' : date.toLocaleString('fr-BE');
+}
+
+function collectProjectPhotos(project) {
+  const clientPhotos = Array.isArray(project.photos) ? project.photos.map(photo => ({ ...photo, origin: 'client', originLabel: 'Photo client' })) : [];
+  const quotePhotos = [];
+  (project.linkedQuotes || []).forEach(quote => {
+    const photos = Array.isArray(quote?.rawDocument?.photos) ? quote.rawDocument.photos : [];
+    photos.forEach(photo => quotePhotos.push({
+      ...photo,
+      origin: 'quote',
+      originLabel: quote.displayRef || quote.ref || 'Brouillon Terrain',
+      quoteRef: quote.displayRef || quote.ref || 'Brouillon Terrain'
+    }));
+  });
+  const seen = new Set();
+  return [...clientPhotos, ...quotePhotos]
+    .filter(photo => {
+      const key = String(photo.driveFileId || photo.id || '');
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a,b) => String(b.takenAt || '').localeCompare(String(a.takenAt || '')));
+}
+
+function renderPhotosTab(project) {
+  const photos = collectProjectPhotos(project);
+  const clientCount = photos.filter(photo => photo.origin === 'client').length;
+  const quoteCount = photos.filter(photo => photo.origin === 'quote').length;
+  return `
+    <div class="form-card">
+      <div class="section-head">
+        <div>
+          <h3 class="section-title">Photos du client</h3>
+          <div class="hint">${clientCount} photo(s) client · ${quoteCount} photo(s) liée(s) aux devis</div>
+        </div>
+      </div>
+      ${!googleAccessToken ? '<div class="hint">Connecte Google Drive pour afficher les photos.</div>' : ''}
+      <div class="crm-photo-grid">
+        ${photos.length ? photos.map(photo => `
+          <article class="crm-photo-card">
+            <button type="button" class="crm-photo-delete" onclick="event.stopPropagation(); deleteCrmPhoto('${escapeAttr(photo.driveFileId || photo.id || '')}')" aria-label="Supprimer la photo" title="Supprimer la photo">🗑️</button>
+            <button type="button" class="crm-photo-open" onclick="openCrmPhoto('${escapeAttr(photo.driveFileId || '')}')" aria-label="Ouvrir la photo">
+              <span class="crm-photo-placeholder">📷</span>
+              <img data-crm-drive-photo="${escapeAttr(photo.driveFileId || '')}" alt="${escapeAttr(photo.originLabel || 'Photo client')}" loading="lazy">
+            </button>
+            <div class="crm-photo-meta">
+              <strong>${escapeHtml(photo.originLabel || 'Photo client')}</strong>
+              <small>${escapeHtml(crmPhotoDate(photo.takenAt))}</small>
+              ${photo.note ? `<span>${escapeHtml(photo.note)}</span>` : ''}
+            </div>
+          </article>`).join('') : '<div class="hint">Aucune photo enregistrée pour ce client.</div>'}
+      </div>
+    </div>`;
+}
+
+async function fetchCrmPhotoUrl(fileId) {
+  if (!fileId || !googleAccessToken) return '';
+  if (crmPhotoObjectUrls.has(fileId)) return crmPhotoObjectUrls.get(fileId);
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
+    headers: { Authorization: `Bearer ${googleAccessToken}` }
+  });
+  if (!response.ok) return '';
+  const url = URL.createObjectURL(await response.blob());
+  crmPhotoObjectUrls.set(fileId, url);
+  return url;
+}
+
+async function hydrateCrmPhotoImages() {
+  const images = Array.from(document.querySelectorAll('img[data-crm-drive-photo]'));
+  await Promise.all(images.map(async image => {
+    const url = await fetchCrmPhotoUrl(image.dataset.crmDrivePhoto);
+    if (url && image.isConnected) {
+      image.src = url;
+      image.closest('.crm-photo-card')?.classList.add('is-loaded');
+    }
+  }));
+}
+
+async function openCrmPhoto(fileId) {
+  if (!googleAccessToken) return notify('Connecte Google Drive pour ouvrir cette photo.');
+  const url = await fetchCrmPhotoUrl(fileId);
+  if (!url) return notify('La photo ne peut pas être chargée.');
+  openGenericModal(`
+    <div class="modal-head">
+      <h2>Photo</h2>
+      <button class="small ghost" onclick="closeGenericModal()">✕</button>
+    </div>
+    <img class="crm-photo-full" src="${escapeAttr(url)}" alt="Photo du client">
+  `);
+}
+
+
+function photoMatchesId(photo, photoId) {
+  return String(photo?.driveFileId || photo?.id || '') === String(photoId || '');
+}
+
+function removePhotoFromList(photos, photoId) {
+  return (Array.isArray(photos) ? photos : []).filter(photo => !photoMatchesId(photo, photoId));
+}
+
+async function deleteCrmPhoto(photoId) {
+  const id = String(photoId || '').trim();
+  if (!id) return notify('Cette photo ne peut pas être supprimée.');
+  if (!confirm('Supprimer définitivement cette photo ?')) return;
+
+  beginSuiviClientLoading('Suppression de la photo…');
+  try {
+    const fullCrmData = readFullCrmDataFromLocalStorage();
+    fullCrmData.clients = (fullCrmData.clients || []).map(client => ({
+      ...client,
+      photos: removePhotoFromList(client.photos, id)
+    }));
+    writeFullCrmDataToLocalStorage(fullCrmData);
+
+    crmDriveClientsCache = (crmDriveClientsCache || []).map(client => ({
+      ...client,
+      photos: removePhotoFromList(client.photos, id)
+    }));
+
+    data.projects = (data.projects || []).map(project => ({
+      ...project,
+      photos: removePhotoFromList(project.photos, id),
+      linkedQuotes: (project.linkedQuotes || []).map(quote => ({
+        ...quote,
+        rawDocument: quote.rawDocument ? {
+          ...quote.rawDocument,
+          photos: removePhotoFromList(quote.rawDocument.photos, id)
+        } : quote.rawDocument
+      }))
+    }));
+    saveLocalOnly();
+
+    const drafts = loadTerrainDrafts().map(draft => ({
+      ...draft,
+      photos: removePhotoFromList(draft.photos, id)
+    }));
+    saveTerrainDrafts(drafts);
+
+    let driveDeleted = false;
+    if (googleAccessToken) {
+      const response = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${googleAccessToken}` }
+      }, false);
+      driveDeleted = !!response && (response.ok || response.status === 404);
+      await Promise.all([
+        saveCrmDataToDrive(fullCrmData, false),
+        saveTerrainDraftsToDrive(drafts),
+        saveSyncToDrive(false)
+      ]);
+    }
+
+    const objectUrl = crmPhotoObjectUrls.get(id);
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    crmPhotoObjectUrls.delete(id);
+    renderMain();
+    notify(googleAccessToken && driveDeleted
+      ? 'Photo supprimée du PC et de Google Drive.'
+      : 'Photo supprimée du suivi client sur ce PC.');
+  } catch (error) {
+    console.error('Suppression de la photo impossible.', error);
+    notify('La suppression de la photo a échoué.');
+  } finally {
+    endSuiviClientLoading();
+  }
+}
+
+function renderQuotesTab(project) {
+  return `
+        <div class="form-card">
+          <div class="section-head">
+            <h3 class="section-title">Devis liés</h3>
+            <div class="inline-actions">
+              <button class="small" onclick="openCrmDocumentLinkModal()">Charger docs client</button>
+            </div>
+          </div>
+          ${renderMoneyTable(project.linkedQuotes || [], 'quote')}
+        </div>
+      `;
+}
+
+
+
+function readTerrainDraftsLocal() {
+  try {
+    const raw = localStorage.getItem(TERRAIN_DRAFTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('Lecture locale des brouillons Terrain impossible.', error);
+    return [];
+  }
+}
+
+terrainDraftsCache = readTerrainDraftsLocal();
+
+function loadTerrainDrafts() {
+  return Array.isArray(terrainDraftsCache) ? terrainDraftsCache : [];
+}
+
+function saveTerrainDrafts(drafts) {
+  terrainDraftsCache = Array.isArray(drafts) ? drafts : [];
+  localStorage.setItem(TERRAIN_DRAFTS_STORAGE_KEY, JSON.stringify(terrainDraftsCache, null, 2));
+}
+
+async function loadTerrainDraftsFromDrive() {
+  if (!googleAccessToken) return false;
+  try {
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `name='${TERRAIN_DRAFTS_DRIVE_FILE_NAME}' and trashed=false`,
+      orderBy: 'modifiedTime desc',
+      pageSize: 1,
+      fields: 'files(id,name,modifiedTime)'
+    });
+    if (!list) return false;
+    const file = (list.result.files || [])[0];
+    if (!file) {
+      terrainDraftsCache = readTerrainDraftsLocal();
+      return false;
+    }
+    const response = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    });
+    if (!response || !response.ok) return false;
+    const parsed = await response.json();
+    if (!Array.isArray(parsed)) return false;
+    saveTerrainDrafts(parsed);
+    return true;
+  } catch (error) {
+    console.error('Chargement des brouillons Terrain depuis Drive impossible.', error);
+    return false;
+  }
+}
+
+async function saveTerrainDraftsToDrive(drafts) {
+  if (!googleAccessToken) return false;
+  try {
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `name='${TERRAIN_DRAFTS_DRIVE_FILE_NAME}' and trashed=false`,
+      fields: 'files(id,name)'
+    });
+    if (!list) return false;
+    const files = list.result.files || [];
+    const existing = files[0];
+    const metadata = existing
+      ? { name: TERRAIN_DRAFTS_DRIVE_FILE_NAME }
+      : { name: TERRAIN_DRAFTS_DRIVE_FILE_NAME, parents: ['appDataFolder'] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([JSON.stringify(Array.isArray(drafts) ? drafts : [], null, 2)], { type: 'application/json' }));
+    const url = existing
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=multipart&fields=id,name`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+    const response = await googleDriveFetch(url, {
+      method: existing ? 'PATCH' : 'POST',
+      headers: { Authorization: `Bearer ${googleAccessToken}` },
+      body: form
+    });
+    return !!response && response.ok;
+  } catch (error) {
+    console.error('Sauvegarde des brouillons Terrain sur Drive impossible.', error);
+    return false;
+  }
+}
+
+function terrainDraftMatchesProject(project, draft) {
+  if (!project || !draft) return false;
+  const same = (a, b) => normalizeLinkKey(a) && normalizeLinkKey(a) === normalizeLinkKey(b);
+  return same(project.clientId, draft.clientId)
+    || same(project.clientRef, draft.clientNumber)
+    || same(project.clientEmail || project.email, draft.clientEmail)
+    || same(project.clientName || project.title, draft.clientName);
+}
+
+function getProjectTerrainDrafts(project) {
+  return loadTerrainDrafts()
+    .filter(draft => terrainDraftMatchesProject(project, draft))
+    .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+}
+
+function terrainDraftTotal(draft) {
+  return (Array.isArray(draft?.lines) ? draft.lines : []).reduce((total, line) => {
+    const qty = Number(line.qty) || 0;
+    const price = Number(line.unitPrice) || 0;
+    const discount = Math.max(0, Math.min(100, Number(line.discount) || 0));
+    return total + qty * price * (1 - discount / 100);
+  }, 0);
+}
+
+function renderDraftsTab(project) {
+  const drafts = getProjectTerrainDrafts(project);
+  return `
+    <div class="form-card">
+      <div class="section-head">
+        <div>
+          <h3 class="section-title">Brouillons Terrain</h3>
+          <div class="hint">${drafts.length} brouillon${drafts.length === 1 ? '' : 's'} lié${drafts.length === 1 ? '' : 's'} à ce client.</div>
+        </div>
+      </div>
+      ${drafts.length ? `<div class="crm-draft-list">${drafts.map(draft => {
+        const transformed = !!String(draft.convertedQuoteNumber || '').trim();
+        const lineCount = Array.isArray(draft.lines) ? draft.lines.filter(line => String(line.description || '').trim()).length : 0;
+        return `<article class="crm-draft-card">
+          <div class="crm-draft-main">
+            <div class="crm-draft-title-row">
+              <strong>${escapeHtml(draft.siteName || 'Brouillon Terrain')}</strong>
+              <span class="crm-draft-status ${transformed ? 'is-converted' : ''}">${transformed ? `Transformé en ${escapeHtml(draft.convertedQuoteNumber)}` : 'Brouillon'}</span>
+            </div>
+            <div class="hint">${escapeHtml(formatDate((draft.updatedAt || draft.createdAt || '').slice(0, 10)))} · ${lineCount} ligne${lineCount === 1 ? '' : 's'} · ${formatMoney(terrainDraftTotal(draft))} HTVA</div>
+            ${draft.notes ? `<p class="crm-draft-notes">${escapeHtml(draft.notes)}</p>` : ''}
+          </div>
+          <div class="crm-draft-menu">
+            <button class="crm-draft-menu-trigger" type="button" onclick="toggleTerrainDraftMenu(event, '${escapeAttr(draft.id)}')" aria-label="Actions du brouillon" title="Actions">•••</button>
+            <div class="crm-draft-menu-popover" id="terrainDraftMenu-${escapeAttr(draft.id)}">
+              <button type="button" onclick="closeTerrainDraftMenus(); openTerrainDraft('${escapeAttr(draft.id)}')">Ouvrir</button>
+              ${transformed
+                ? `<button type="button" onclick="closeTerrainDraftMenus(); openConvertedTerrainQuote('${escapeAttr(draft.id)}')">Ouvrir le devis</button>`
+                : `<button type="button" onclick="closeTerrainDraftMenus(); convertTerrainDraftToQuote('${escapeAttr(draft.id)}')">Passer en devis</button>`}
+              <button class="is-danger" type="button" onclick="closeTerrainDraftMenus(); deleteTerrainDraft('${escapeAttr(draft.id)}')">Supprimer</button>
+            </div>
+          </div>
+        </article>`;
+      }).join('')}</div>` : '<div class="hint">Aucun brouillon Terrain pour ce client.</div>'}
+    </div>`;
+}
+
+
+function closeTerrainDraftMenus() {
+  document.querySelectorAll('.crm-draft-menu-popover.is-open').forEach(menu => {
+    menu.classList.remove('is-open', 'opens-up');
+    menu.style.left = '';
+    menu.style.top = '';
+    menu.style.right = '';
+    menu.style.bottom = '';
+  });
+}
+
+function positionTerrainDraftMenu(menu, trigger) {
+  const margin = 10;
+  const gap = 6;
+  const triggerRect = trigger.getBoundingClientRect();
+
+  // Le menu est en position fixe afin de ne jamais être coupé par la fiche client.
+  menu.style.visibility = 'hidden';
+  menu.classList.add('is-open');
+  const menuRect = menu.getBoundingClientRect();
+
+  let left = triggerRect.right - menuRect.width;
+  left = Math.max(margin, Math.min(left, window.innerWidth - menuRect.width - margin));
+
+  const availableBelow = window.innerHeight - triggerRect.bottom - margin;
+  const availableAbove = triggerRect.top - margin;
+  const openAbove = availableBelow < menuRect.height + gap && availableAbove > availableBelow;
+  let top = openAbove
+    ? triggerRect.top - menuRect.height - gap
+    : triggerRect.bottom + gap;
+  top = Math.max(margin, Math.min(top, window.innerHeight - menuRect.height - margin));
+
+  menu.classList.toggle('opens-up', openAbove);
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+  menu.style.right = 'auto';
+  menu.style.bottom = 'auto';
+  menu.style.visibility = '';
+}
+
+function toggleTerrainDraftMenu(event, draftId) {
+  event.preventDefault();
+  event.stopPropagation();
+  const trigger = event.currentTarget;
+  const menu = document.getElementById(`terrainDraftMenu-${draftId}`);
+  if (!menu || !trigger) return;
+  const shouldOpen = !menu.classList.contains('is-open');
+  closeTerrainDraftMenus();
+  if (shouldOpen) positionTerrainDraftMenu(menu, trigger);
+}
+
+async function deleteTerrainDraft(draftId) {
+  const drafts = loadTerrainDrafts();
+  const draft = drafts.find(item => String(item.id) === String(draftId));
+  if (!draft) return notify('Brouillon Terrain introuvable.');
+  if (!confirm(`Supprimer le brouillon « ${draft.siteName || 'Brouillon Terrain'} » ?${draft.convertedQuoteNumber ? ' Le devis déjà créé sera conservé.' : ''}`)) return;
+
+  beginSuiviClientLoading('Suppression du brouillon…');
+  try {
+    const remaining = drafts.filter(item => String(item.id) !== String(draftId));
+    saveTerrainDrafts(remaining);
+    if (googleAccessToken) await saveTerrainDraftsToDrive(remaining);
+    renderMain();
+    notify(draft.convertedQuoteNumber
+      ? 'Brouillon supprimé. Le devis créé a été conservé.'
+      : 'Brouillon supprimé.');
+  } catch (error) {
+    console.error('Suppression du brouillon impossible.', error);
+    notify('La suppression du brouillon a échoué.');
+  } finally {
+    endSuiviClientLoading();
+  }
+}
+
+function terrainDraftLineTotal(line) {
+  const qty = Number(line?.qty) || 0;
+  const price = Number(line?.unitPrice) || 0;
+  const discount = Math.max(0, Math.min(100, Number(line?.discount) || 0));
+  return qty * price * (1 - discount / 100);
+}
+
+function openTerrainDraft(draftId) {
+  const project = getProject();
+  const draft = loadTerrainDrafts().find(item => String(item.id) === String(draftId));
+  if (!project || !draft || !terrainDraftMatchesProject(project, draft)) return notify('Brouillon Terrain introuvable.');
+
+  const lines = (Array.isArray(draft.lines) ? draft.lines : []).filter(line => String(line.description || '').trim());
+  const photos = Array.isArray(draft.photos) ? draft.photos : [];
+  const transformed = !!String(draft.convertedQuoteNumber || '').trim();
+  const createdDate = formatDate(String(draft.updatedAt || draft.createdAt || draft.date || '').slice(0, 10));
+
+  openGenericModal(`
+    <div class="modal-head">
+      <div>
+        <h2>${escapeHtml(draft.siteName || 'Brouillon Terrain')}</h2>
+        <div class="hint">${escapeHtml(draft.clientName || project.clientName || project.title || '')} · ${escapeHtml(createdDate)}</div>
+      </div>
+      <button class="small ghost" type="button" onclick="closeGenericModal()">✕</button>
+    </div>
+
+    <div class="crm-draft-summary">
+      <div><span>État</span><strong>${transformed ? `Transformé en ${escapeHtml(draft.convertedQuoteNumber)}` : 'Brouillon'}</strong></div>
+      <div><span>Chantier</span><strong>${escapeHtml(draft.siteName || 'Sans chantier')}</strong></div>
+      <div><span>Total HTVA</span><strong>${formatMoney(terrainDraftTotal(draft))}</strong></div>
+      <div><span>Photos</span><strong>${photos.length}</strong></div>
+    </div>
+
+    <section class="crm-draft-detail-section">
+      <h3>Prestations</h3>
+      ${lines.length ? `<div class="crm-draft-detail-table">
+        <div class="crm-draft-detail-row is-head"><span>Description</span><span>Qté</span><span>Prix unitaire</span><span>Total</span></div>
+        ${lines.map(line => `<div class="crm-draft-detail-row">
+          <span>${escapeHtml(line.description || '')}${line.unit ? `<small>${escapeHtml(line.unit)}</small>` : ''}</span>
+          <span>${escapeHtml(String(line.qty ?? ''))}</span>
+          <span>${formatMoney(Number(line.unitPrice) || 0)}</span>
+          <strong>${formatMoney(terrainDraftLineTotal(line))}</strong>
+        </div>`).join('')}
+      </div>` : '<div class="hint">Aucune prestation dans ce brouillon.</div>'}
+    </section>
+
+    ${draft.notes ? `<section class="crm-draft-detail-section"><h3>Notes</h3><div class="crm-draft-detail-notes">${escapeHtml(draft.notes).replace(/\n/g, '<br>')}</div></section>` : ''}
+
+    <section class="crm-draft-detail-section">
+      <h3>Photos (${photos.length})</h3>
+      ${!googleAccessToken && photos.length ? '<div class="hint">Connecte Google Drive pour afficher les photos.</div>' : ''}
+      ${photos.length ? `<div class="crm-photo-grid">${photos.map(photo => `
+        <article class="crm-photo-card">
+          <button type="button" class="crm-photo-open" onclick="openCrmPhoto('${escapeAttr(photo.driveFileId || '')}')" aria-label="Ouvrir la photo">
+            <span class="crm-photo-placeholder">📷</span>
+            <img data-crm-drive-photo="${escapeAttr(photo.driveFileId || '')}" alt="Photo du brouillon" loading="lazy">
+          </button>
+          <div class="crm-photo-meta">
+            <small>${escapeHtml(crmPhotoDate(photo.takenAt))}</small>
+            ${photo.note ? `<span>${escapeHtml(photo.note)}</span>` : ''}
+          </div>
+        </article>`).join('')}</div>` : '<div class="hint">Aucune photo liée à ce brouillon.</div>'}
+    </section>
+
+    <div class="modal-actions">
+      <button class="small" type="button" onclick="closeGenericModal()">Fermer</button>
+      ${transformed
+        ? `<button class="primary" type="button" onclick="closeGenericModal(); openConvertedTerrainQuote('${escapeAttr(draft.id)}')">Ouvrir le devis ${escapeHtml(draft.convertedQuoteNumber)}</button>`
+        : `<button class="primary" type="button" onclick="closeGenericModal(); convertTerrainDraftToQuote('${escapeAttr(draft.id)}')">Passer en devis</button>`}
+    </div>
+  `);
+
+  if (photos.length) setTimeout(() => hydrateCrmPhotoImages().catch(console.warn), 0);
+}
+
+function collectKnownQuoteNumbers() {
+  const values = [];
+  const current = loadDevisFactureData();
+  if (current?.quote?.documentNumber) values.push(current.quote.documentNumber);
+  (data.projects || []).forEach(project => (project.linkedQuotes || []).forEach(item => values.push(item.ref, item.displayRef)));
+  loadTerrainDrafts().forEach(draft => values.push(draft.convertedQuoteNumber));
+  return values.filter(Boolean);
+}
+
+function nextTerrainQuoteNumber() {
+  const year = String(new Date().getFullYear());
+  let highest = 0;
+  collectKnownQuoteNumbers().forEach(value => {
+    const match = String(value || '').trim().toUpperCase().match(/^D-(\d{4})-(\d+)$/);
+    if (match && match[1] === year) highest = Math.max(highest, Number(match[2]) || 0);
+  });
+  return `D-${year}-${String(highest + 1).padStart(3, '0')}`;
+}
+
+function buildQuoteFromTerrainDraft(draft, number) {
+  return {
+    documentNumber: number,
+    status: 'draft',
+    terrainDraftId: String(draft.id || ''),
+    transferredFromTerrain: true,
+    terrainTransferredAt: draft.transferredAt || new Date().toISOString(),
+    clientNumber: draft.clientNumber || '',
+    clientVat: draft.clientVat || '',
+    clientId: draft.clientId || '',
+    clientName: draft.clientName || '',
+    clientEmail: draft.clientEmail || '',
+    address: draft.address || '',
+    date: draft.date || todayISO(),
+    validity: draft.validity || '',
+    siteName: draft.siteName || '',
+    chantierId: '',
+    lines: Array.isArray(draft.lines) ? JSON.parse(JSON.stringify(draft.lines)) : [],
+    suppliesEnabled: false,
+    suppliesLines: [],
+    notes: draft.notes || '',
+    photos: Array.isArray(draft.photos) ? JSON.parse(JSON.stringify(draft.photos)) : []
+  };
+}
+
+async function convertTerrainDraftToQuote(draftId) {
+  const project = getProject();
+  const drafts = loadTerrainDrafts();
+  const draft = drafts.find(item => String(item.id) === String(draftId));
+  if (!project || !draft || !terrainDraftMatchesProject(project, draft)) return notify('Brouillon Terrain introuvable.');
+  if (draft.convertedQuoteNumber) return openConvertedTerrainQuote(draftId);
+  if (!Array.isArray(draft.lines) || !draft.lines.some(line => String(line.description || '').trim())) return notify('Ce brouillon ne contient aucune prestation.');
+
+  const number = nextTerrainQuoteNumber();
+  const fullData = readFullCrmDataFromLocalStorage();
+  const quote = buildQuoteFromTerrainDraft(draft, number);
+  fullData.quote = quote;
+  writeFullCrmDataToLocalStorage(fullData);
+
+  draft.status = 'converted';
+  draft.convertedQuoteNumber = number;
+  draft.convertedAt = new Date().toISOString();
+  const index = drafts.findIndex(item => String(item.id) === String(draftId));
+  drafts[index] = draft;
+  saveTerrainDrafts(drafts);
+  await saveTerrainDraftsToDrive(drafts);
+
+  const entry = buildCrmDocEntry('quote', quote, 'Brouillon Terrain');
+  if (entry) {
+    if (!Array.isArray(project.linkedQuotes)) project.linkedQuotes = [];
+    const payload = {
+      id: `quote-${number}`,
+      documentUid: `quote:${normalizeLinkKey(number)}`,
+      date: entry.date,
+      ref: number,
+      displayRef: number,
+      description: `Devis ${number}`,
+      amount: entry.clientHtva || entry.htva || 0,
+      clientHtva: entry.clientHtva || entry.htva || 0,
+      totalClientHtva: entry.clientHtva || entry.htva || 0,
+      workHtva: entry.workHtva || entry.htva || 0,
+      htva: entry.htva || 0,
+      vat: entry.vat || 0,
+      tvac: entry.tvac || 0,
+      suppliesCost: entry.suppliesCost || 0,
+      suppliesCostHtva: entry.suppliesCostHtva || 0,
+      suppliesHtva: entry.suppliesHtva || 0,
+      suppliesSaleHtva: entry.suppliesSaleHtva || 0,
+      source: 'Brouillon Terrain',
+      docKey: 'quote',
+      suiviClientId: project.id,
+      chantierId: project.id,
+      clientId: quote.clientId,
+      clientName: quote.clientName,
+      clientRef: quote.clientNumber,
+      siteName: quote.siteName || project.title,
+      rawDocument: quote
+    };
+    project.linkedQuotes = (project.linkedQuotes || []).filter(item => normalizeLinkKey(item.ref) !== normalizeLinkKey(number));
+    project.linkedQuotes.unshift(payload);
+    project.linkedQuotes = dedupeMoneyList(project.linkedQuotes);
+    addTimeline(project, `Brouillon Terrain transformé en devis ${number}.`);
+    saveLocalOnly();
+  }
+
+  renderMain();
+  notify(`Devis ${number} créé et chargé dans la Gestion commerciale.`);
+  openQuoteInFullModule(number);
+}
+
+function openConvertedTerrainQuote(draftId) {
+  const draft = loadTerrainDrafts().find(item => String(item.id) === String(draftId));
+  const number = String(draft?.convertedQuoteNumber || '').trim();
+  if (!number) return notify('Aucun devis créé pour ce brouillon.');
+  const project = getProject();
+  const item = (project?.linkedQuotes || []).find(quote => normalizeLinkKey(quote.ref) === normalizeLinkKey(number));
+  if (item?.rawDocument) {
+    const fullData = readFullCrmDataFromLocalStorage();
+    fullData.quote = item.rawDocument;
+    writeFullCrmDataToLocalStorage(fullData);
+  }
+  openQuoteInFullModule(number);
+}
+
+function openQuoteInFullModule(number) {
+  const targetOrigin = window.location.origin && window.location.origin !== 'null' ? window.location.origin : '*';
+  window.parent?.postMessage({ type: 'BASTCOMPTA_OPEN_DEVIS_DOCUMENT', docKey: 'quote', ref: number || '' }, targetOrigin);
+}
+
+function renderFinanceTab(project) {
+  return `
+        <div class="form-card">
+          <div class="section-head">
+            <h3 class="section-title">Factures liées</h3>
+            <div class="inline-actions">
+              <button class="small" onclick="openCrmDocumentLinkModal()">Charger docs client</button>
+              <button class="small primary" onclick="openInvoiceJsonImport()">Ajouter une facture</button>
+            </div>
+          </div>
+          ${renderMoneyTable(project.linkedInvoices, 'invoice')}
+        </div>
+
+        <div class="form-card">
+          <div class="section-head">
+            <h3 class="section-title">Rappels liés</h3>
+            <button class="small primary" onclick="openMoneyModal('reminder')">Ajouter un rappel</button>
+          </div>
+          ${renderMoneyTable(project.linkedReminders || [], 'reminder')}
+        </div>
+
+        <div class="form-card">
+          <div class="section-head">
+            <h3 class="section-title">Coûts manuels / corrections</h3>
+            <button class="small primary" onclick="openMoneyModal('cost')">Ajouter un coût</button>
+          </div>
+          <div class="hint">Les fournitures présentes dans les factures sont déjà comptées automatiquement comme coûts. Ajoutez ici seulement les coûts non présents dans les factures.</div>
+          ${renderMoneyTable(project.costs, 'cost')}
+        </div>
+      `;
+}
+
+function moneyTypeToDocKey(type) {
+  return type === 'invoice' ? 'invoice' : type === 'reminder' ? 'reminder' : type === 'quote' ? 'quote' : '';
+}
+
+function moneyTypeLabel(type) {
+  return type === 'invoice' ? 'Facture' : type === 'reminder' ? 'Rappel' : type === 'quote' ? 'Devis' : 'Ligne';
+}
+
+function renderMoneyTable(items, type) {
+  if (!items.length) {
+    return '<div class="hint">Aucune ligne ajoutée.</div>';
+  }
+
+  const isCrmDoc = ['quote', 'invoice', 'reminder'].includes(type);
+
+  return `
+        <div class="table-wrap money-table-wrap">
+          <table class="money-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Référence</th>
+                <th>Description</th>
+                <th class="num">Montant</th>
+                <th class="no-print">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(item => `
+                <tr>
+                  <td data-label="Date">${formatDate(item.date)}</td>
+                  <td data-label="Référence">${escapeHtml(item.displayRef || item.ref || '—')}</td>
+                  <td data-label="Description">${escapeHtml(item.description || `${moneyTypeLabel(type)} ${item.ref || ''}`.trim() || '—')}</td>
+                  <td class="num" data-label="Montant"><strong class="money-main-value">${formatMoney(projectMoneyValue(item))}</strong>${type === 'invoice' && Number(item.suppliesHtva || item.suppliesSaleHtva || item.suppliesCost || 0) ? '<small class="money-breakdown"><span>Vendu ' + formatMoney(item.suppliesSaleHtva || item.suppliesHtva || 0) + '</span><span>Revient ' + formatMoney(item.suppliesCost ?? item.suppliesCostHtva ?? item.suppliesHtva ?? 0) + '</span></small>' : ''}</td>
+                  <td class="no-print" data-label="Actions">
+                    <div class="inline-actions document-actions">
+                      ${isCrmDoc ? `<button class="crm-doc-action is-preview" type="button" title="Afficher" aria-label="Afficher" onclick="previewCrmLinkedDocument('${type}', '${escapeAttr(item.id)}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg></button>` : ''}
+                      ${isCrmDoc ? `<button class="crm-doc-action is-load" type="button" title="Charger dans le module" aria-label="Charger dans le module" onclick="loadCrmLinkedDocumentInDevis('${type}', '${escapeAttr(item.id)}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg></button>` : ''}
+                      ${isCrmDoc ? `
+                        <details class="download-menu">
+                          <summary class="crm-doc-action is-download" title="Télécharger" aria-label="Télécharger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></summary>
+                          <div class="download-menu-panel">
+                            <button class="small" type="button" onclick="downloadCrmLinkedDocumentPdf('${type}', '${escapeAttr(item.id)}'); this.closest('details').removeAttribute('open');">PDF</button>
+                            <button class="small" type="button" onclick="downloadCrmLinkedDocument('${type}', '${escapeAttr(item.id)}'); this.closest('details').removeAttribute('open');">JSON</button>
+                          </div>
+                        </details>
+                      ` : ''}
+                      <button class="small doc-delete-btn" title="Supprimer" aria-label="Supprimer" onclick="${isCrmDoc ? `deleteCrmLinkedDocument('${type}', '${escapeAttr(item.id)}')` : `deleteMoneyItem('${type}', '${escapeAttr(item.id)}')`}"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+}
+
+function getLinkedDocumentItem(type, itemId) {
+  const project = getProject();
+  if (!project) return null;
+
+  const listName = type === 'quote'
+    ? 'linkedQuotes'
+    : type === 'invoice'
+      ? 'linkedInvoices'
+      : type === 'reminder'
+        ? 'linkedReminders'
+        : '';
+
+  const list = listName ? (project[listName] || []) : [];
+
+  return list.find(item =>
+    String(item.id || '') === String(itemId) ||
+    String(item.documentUid || '') === String(itemId) ||
+    String(item.fileId || '') === String(itemId)
+  ) || null;
+}
+
+function buildSingleDocumentPayloadFromCurrentData(docKey) {
+  const devisData = loadDevisFactureData();
+  const doc = devisData?.[docKey];
+  if (!doc || !doc.documentNumber) return null;
+  const payload = { ...devisData };
+  payload[docKey] = doc;
+  return payload;
+}
+
+async function getLinkedDocumentSourcePayload(type, item) {
+  const docKey = moneyTypeToDocKey(type);
+  if (!docKey || !item) return null;
+
+  if (item.fileId && googleAccessToken) {
+    try {
+      const parsed = await fetchDriveJson(item.fileId);
+      if (parsed?.[docKey]) return parsed;
+    } catch (error) {
+      console.warn('FileId Drive invalide, recherche par nom...', item.fileId, error);
+    }
+  }
+
+  if (googleAccessToken && item.ref) {
+    const prefix =
+      docKey === 'quote'
+        ? 'devis'
+        : docKey === 'invoice'
+          ? 'facture'
+          : 'rappel';
+
+    const expectedName = `${prefix}-${item.ref}.json`;
+
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `name='${expectedName.replace(/'/g, "\\'")}' and trashed=false`,
+      fields: 'files(id,name,modifiedTime)',
+      pageSize: 10
+    }, false);
+
+    const file = list?.result?.files?.[0];
+
+    if (file?.id) {
+      const parsed = await fetchDriveJson(file.id);
+
+      if (parsed?.[docKey]) {
+        item.fileId = file.id;
+        item.fileName = file.name;
+        item.documentUid = file.id;
+        saveLocalOnly();
+        return parsed;
+      }
+    }
+  }
+
+  const localData = loadDevisFactureData();
+
+  if (
+    localData?.[docKey] &&
+    String(localData[docKey].documentNumber || '') === String(item.ref || '')
+  ) {
+    return localData;
+  }
+
+  return null;
+}
+
+async function previewCrmLinkedDocument(type, itemId) {
+  const item = getLinkedDocumentItem(type, itemId);
+  if (!item) return notify('Document introuvable dans la fiche client.');
+  const payload = await getLinkedDocumentSourcePayload(type, item);
+  const docKey = moneyTypeToDocKey(type);
+  const doc = payload?.[docKey] || {};
+  const totals = documentTotals(doc);
+  const lines = Array.isArray(doc.lines) ? doc.lines : [];
+  const supplies = doc.suppliesEnabled && Array.isArray(doc.suppliesLines) ? doc.suppliesLines : [];
+  openGenericModal(`
+        <div class="modal-head">
+          <div>
+            <h2>${escapeHtml(moneyTypeLabel(type))} ${escapeHtml(item.ref || doc.documentNumber || '')}</h2>
+            <div class="hint">${escapeHtml(item.description || `${moneyTypeLabel(type)} ${item.ref || ''}`.trim())}</div>
+          </div>
+          <button class="small ghost" onclick="closeGenericModal()">✕</button>
+        </div>
+        <div class="grid-3">
+          <div class="mini-stat"><span>Date</span><strong>${escapeHtml(doc.date || item.date || '—')}</strong></div>
+          <div class="mini-stat"><span>Client</span><strong>${escapeHtml(doc.clientName || item.clientName || '—')}</strong></div>
+          <div class="mini-stat"><span>Total HTVA</span><strong>${formatMoney(totals.clientHtva || item.clientHtva || item.amount || 0)}</strong></div>
+        </div>
+        <div class="form-card">
+          <h3 class="section-title">Lignes</h3>
+          ${lines.length ? `<div class="table-wrap"><table><thead><tr><th>Description</th><th class="num">Qté</th><th class="num">Prix unit.</th><th class="num">HTVA</th></tr></thead><tbody>${lines.map(line => `<tr><td>${escapeHtml(line.description || '')}</td><td class="num">${escapeHtml(line.qty ?? line.quantity ?? '')}</td><td class="num">${formatMoney(line.unitPrice ?? line.price ?? 0)}</td><td class="num">${formatMoney(moneyLineHtva(line))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="hint">Aucune ligne détaillée disponible.</div>'}
+        </div>
+        ${supplies.length ? `<div class="form-card"><h3 class="section-title">Fournitures</h3><div class="table-wrap"><table><thead><tr><th>Description</th><th class="num">Qté</th><th class="num">Vente</th><th class="num">Revient</th></tr></thead><tbody>${supplies.map(line => `<tr><td>${escapeHtml(line.description || '')}</td><td class="num">${escapeHtml(line.qty ?? line.quantity ?? '')}</td><td class="num">${formatMoney(moneyLineHtva(line))}</td><td class="num">${formatMoney(moneyLineCostHtva(line))}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+        <div class="modal-actions document-actions">
+          <button onclick="loadCrmLinkedDocumentInDevis('${type}', '${escapeAttr(item.id)}')">Charger dans la Gestion commerciale</button>
+          <details class="download-menu">
+            <summary>Télécharger</summary>
+            <div class="download-menu-panel">
+              <button type="button" onclick="downloadCrmLinkedDocumentPdf('${type}', '${escapeAttr(item.id)}'); this.closest('details').removeAttribute('open');">PDF</button>
+              <button type="button" onclick="downloadCrmLinkedDocument('${type}', '${escapeAttr(item.id)}'); this.closest('details').removeAttribute('open');">JSON</button>
+            </div>
+          </details>
+        </div>
+      `);
+}
+
+
+/* ==========================================================
+   EXPORT PDF METIER - Devis / Facture / Rappel
+   Génère un vrai document A4 avec le rendu comptable Bast Aménagement,
+   sans capturer l'écran de l'application.
+   ========================================================== */
+
+function loadExternalScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    if ([...document.scripts].some(script => script.src === src)) return resolve();
+    const script = document.createElement('script');
+    script.src = src;
+    script.crossOrigin = 'anonymous';
+    script.referrerPolicy = 'no-referrer';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Chargement impossible : ' + src));
+    document.head.appendChild(script);
+  });
+}
+
+async function ensureDocumentPdfLibraries() {
+  if (!window.jspdf?.jsPDF) {
+    await loadExternalScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  }
+  if (!window.jspdf?.jsPDF?.API?.autoTable) {
+    await loadExternalScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+  }
+  return window.jspdf?.jsPDF;
+}
+
+function pdfClean(value, fallback = '') {
+  const text = String(value ?? fallback ?? '').replace(/\r/g, '').trim();
+  return text || fallback || '';
+}
+
+function pdfNumber(value) {
+  const number = Number(String(value ?? '').replace(',', '.'));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function pdfMoney(value) {
+  return new Intl.NumberFormat('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(pdfNumber(value)) + ' €';
+}
+
+function pdfPlainNumber(value) {
+  return new Intl.NumberFormat('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(pdfNumber(value));
+}
+
+function pdfRate(value) {
+  const raw = value ?? 21;
+  const n = pdfNumber(raw);
+  return (n || 0).toString().replace('.', ',') + '%';
+}
+
+function pdfDocTitle(type) {
+  if (type === 'invoice') return 'FACTURE';
+  if (type === 'reminder') return 'RAPPEL';
+  return 'DEVIS';
+}
+
+function pdfDocPrefix(type) {
+  if (type === 'invoice') return 'facture';
+  if (type === 'reminder') return 'rappel';
+  return 'devis';
+}
+
+function getPdfCompany(payload = {}) {
+  const company = payload.company || payload.settings?.company || {};
+  return {
+    name: pdfClean(company.name, 'Bast Aménagement'),
+    address1: pdfClean(company.address1 || company.address || 'Rue du Culot 4'),
+    address2: pdfClean(company.address2 || company.zipCity || '6831 Noirefontaine'),
+    phone: pdfClean(company.phone || company.tel || '+32 478 79 89 76'),
+    email: pdfClean(company.email || 'bast-amenagement@outlook.com'),
+    website: pdfClean(company.website || company.site || 'www.bast-amenagement.com'),
+    vat: pdfClean(company.vat || company.tva || 'BE0799404912'),
+    bank: pdfClean(company.bank || company.iban || 'BE55 0019 4766 7444'),
+    logo: company.logo || company.logoDataUrl || company.logoUrl || ''
+  };
+}
+
+function getPdfDocumentFromPayload(payload, type, item) {
+  const key = moneyTypeToDocKey(type);
+  return payload?.[key] || item?.rawDocument || {};
+}
+
+function getPdfClient(doc = {}, item = {}, project = {}) {
+  return {
+    name: pdfClean(doc.clientName || item.clientName || project.clientName || project.title, 'Client'),
+    address: pdfClean(doc.clientAddress || doc.address || item.address || project.address, ''),
+    number: pdfClean(doc.clientNumber || doc.clientRef || item.clientRef || project.clientRef, ''),
+    vat: pdfClean(doc.clientVat || doc.vat || item.clientVat || project.clientVat, 'NA'),
+    email: pdfClean(doc.clientEmail || doc.email || item.clientEmail || project.clientEmail || project.email, ''),
+    phone: pdfClean(doc.clientPhone || doc.phone || item.phone || project.phone, ''),
+    site: pdfClean(doc.siteName || doc.siteAddress || item.siteName || '', '')
+  };
+}
+
+function pdfLineQty(line) {
+  return line.qty ?? line.quantity ?? line.qte ?? line.amountQty ?? 0;
+}
+
+function pdfLineUnit(line) {
+  return pdfClean(line.unit || line.unity || line.unitLabel || line.u || 'p');
+}
+
+function pdfLineUnitPrice(line) {
+  return line.unitPrice ?? line.price ?? line.pu ?? line.salePrice ?? 0;
+}
+
+function pdfLineDiscount(line) {
+  return line.discount ?? line.remise ?? line.discountPercent ?? 0;
+}
+
+function pdfLineVat(line) {
+  return line.vatRate ?? line.tva ?? line.vat ?? line.taxRate ?? 21;
+}
+
+function pdfLineTotal(line) {
+  const existing = line.htva ?? line.totalHtva ?? line.totalHTVA ?? line.total ?? line.amount;
+  if (existing !== undefined && existing !== null && existing !== '') return pdfNumber(existing);
+  if (typeof moneyLineHtva === 'function') return pdfNumber(moneyLineHtva(line));
+  const qty = pdfNumber(pdfLineQty(line));
+  const unit = pdfNumber(pdfLineUnitPrice(line));
+  const discount = pdfNumber(pdfLineDiscount(line));
+  return qty * unit * Math.max(0, 1 - discount / 100);
+}
+
+function pdfSupplyCost(line) {
+  return line.costHtva ?? line.cost ?? line.purchasePrice ?? line.revient ?? pdfLineTotal(line);
+}
+
+function getPdfPaymentCommunication(doc = {}, type = 'invoice') {
+  return pdfClean(doc.communication || doc.paymentCommunication || doc.structuredCommunication || doc.structuredCom || '');
+}
+
+function addPdfWrappedText(pdf, text, x, y, maxWidth, options = {}) {
+  const size = options.size || 9;
+  pdf.setFontSize(size);
+  pdf.setFont('helvetica', options.bold ? 'bold' : 'normal');
+  const lines = pdf.splitTextToSize(pdfClean(text), maxWidth);
+  pdf.text(lines, x, y);
+  return y + (lines.length * (options.lineHeight || size * 0.42 + 2));
+}
+
+function addPdfPageNumber(pdf) {
+  const count = pdf.internal.getNumberOfPages();
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(110, 110, 110);
+  for (let i = 1; i <= count; i++) {
+    pdf.setPage(i);
+    pdf.text('Page ' + i + ' / ' + count, 105, 287, { align: 'center' });
+  }
+  pdf.setTextColor(0, 0, 0);
+}
+
+async function addPdfLogo(pdf, company, x, y, size) {
+  try {
+    if (company.logo && /^data:image\//.test(company.logo)) {
+      pdf.addImage(company.logo, undefined, x, y, size, size, undefined, 'FAST');
+      return;
+    }
+  } catch (error) {
+    console.warn('Logo PDF ignoré.', error);
+  }
+  pdf.setDrawColor(210, 215, 222);
+  pdf.circle(x + size / 2, y + size / 2, size / 2, 'S');
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.text('BAST', x + size / 2, y + size / 2 - 1, { align: 'center' });
+  pdf.setFontSize(6);
+  pdf.text('AMENAGEMENT', x + size / 2, y + size / 2 + 5, { align: 'center' });
+}
+
+async function buildCommercialDocumentPdf(type, item, payload) {
+  const jsPDF = await ensureDocumentPdfLibraries();
+  if (!jsPDF) throw new Error('Librairie PDF indisponible.');
+
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+  const doc = getPdfDocumentFromPayload(payload, type, item);
+  const project = hydrateProjectWithCrm(getProject()) || {};
+  const company = getPdfCompany(payload);
+  const client = getPdfClient(doc, item, project);
+  const totals = documentTotals(doc);
+  const lines = Array.isArray(doc.lines) ? doc.lines : [];
+  const suppliesEnabled = doc.suppliesEnabled !== false;
+  const supplies = suppliesEnabled && Array.isArray(doc.suppliesLines) ? doc.suppliesLines : [];
+  const number = pdfClean(doc.documentNumber || item.ref || 'document');
+  const date = pdfClean(doc.date || item.date || todayISO());
+  const dueDate = pdfClean(doc.dueDate || doc.due || doc.paymentDueDate || '');
+
+  const margin = 10;
+  let y = 14;
+
+  // En-tête proche du modèle facture envoyé.
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(27);
+  pdf.setTextColor(20, 31, 46);
+  pdf.text(pdfDocTitle(type), 112, 13);
+
+  pdf.setFontSize(13);
+  pdf.text(company.name, margin, 30);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9.5);
+  let companyY = 38;
+  [company.address1, company.address2, 'Tél. ' + company.phone, company.email, company.website, 'TVA ' + company.vat].filter(Boolean).forEach(line => {
+    pdf.text(line, margin, companyY);
+    companyY += 6;
+  });
+  await addPdfLogo(pdf, company, 72, 42, 24);
+
+  pdf.setDrawColor(220, 224, 230);
+  pdf.rect(108, 22, 96, 46);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8.5);
+  pdf.text('CLIENT', 111, 29);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.7);
+  let cy = 36;
+  [client.name, client.address, client.site, client.email ? 'E-mail : ' + client.email : '', client.phone ? 'Tel : ' + client.phone : ''].filter(Boolean).forEach(block => {
+    const parts = pdf.splitTextToSize(block, 88);
+    pdf.text(parts, 111, cy);
+    cy += Math.max(5, parts.length * 4.2);
+  });
+
+  const metaHead = type === 'invoice' || type === 'reminder'
+    ? [['N° DOCUMENT', "DATE\nD’ÉCHÉANCE", 'VOTRE N° DE CLIENT', 'VOTRE N° TVA', 'DATE']]
+    : [['N° DOCUMENT', 'DATE', 'VOTRE N° DE CLIENT', 'VOTRE N° TVA', 'VALIDITÉ']];
+  const metaBody = type === 'invoice' || type === 'reminder'
+    ? [[number, dueDate || '—', client.number || '—', client.vat || 'NA', date]]
+    : [[number, date, client.number || '—', client.vat || 'NA', doc.validUntil || doc.validity || '—']];
+  pdf.autoTable({
+    startY: 78,
+    margin: { left: margin, right: margin },
+    head: metaHead,
+    body: metaBody,
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 8.2, cellPadding: 3, lineColor: [204, 209, 216], lineWidth: 0.35, textColor: [26, 34, 48] },
+    headStyles: { fillColor: [255, 255, 255], textColor: [45, 49, 58], fontStyle: 'bold' },
+    bodyStyles: { fillColor: [255, 255, 255] }
+  });
+
+  y = pdf.lastAutoTable.finalY + 5;
+  const columns = [
+    { header: 'DESCRIPTION', dataKey: 'description' },
+    { header: 'QUANTITÉ', dataKey: 'qty' },
+    { header: 'UNITÉ', dataKey: 'unit' },
+    { header: 'PR. UNIT.', dataKey: 'unitPrice' },
+    { header: 'REMISE', dataKey: 'discount' },
+    { header: 'TOTAL', dataKey: 'total' },
+    { header: 'TVA', dataKey: 'vat' }
+  ];
+  const body = lines.map(line => ({
+    description: pdfClean(line.description || line.label || ''),
+    qty: pdfPlainNumber(pdfLineQty(line)),
+    unit: pdfLineUnit(line),
+    unitPrice: pdfPlainNumber(pdfLineUnitPrice(line)),
+    discount: pdfPlainNumber(pdfLineDiscount(line)),
+    total: pdfMoney(pdfLineTotal(line)),
+    vat: pdfRate(pdfLineVat(line))
+  }));
+
+  if (body.length) {
+    pdf.autoTable({
+      startY: y,
+      margin: { left: margin, right: margin },
+      columns,
+      body,
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 8.2, cellPadding: 3, lineColor: [204, 209, 216], lineWidth: 0.35, valign: 'middle', textColor: [20, 31, 46] },
+      headStyles: { fillColor: [255, 255, 255], textColor: [45, 49, 58], fontStyle: 'bold' },
+      columnStyles: { description: { cellWidth: 52 }, qty: { halign: 'right', cellWidth: 25 }, unit: { cellWidth: 20 }, unitPrice: { halign: 'right', cellWidth: 25 }, discount: { halign: 'right', cellWidth: 24 }, total: { halign: 'right', cellWidth: 28 }, vat: { halign: 'center', cellWidth: 20 } }
+    });
+    y = pdf.lastAutoTable.finalY + 6;
+  }
+
+  if (supplies.length) {
+    if (y > 205) { pdf.addPage(); y = 16; }
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.text('Fournitures', margin, y);
+    y += 5;
+    const sBody = supplies.map(line => ({
+      description: pdfClean(line.description || line.label || ''),
+      qty: pdfPlainNumber(pdfLineQty(line)),
+      unit: pdfLineUnit(line),
+      unitPrice: pdfPlainNumber(pdfLineUnitPrice(line)),
+      discount: pdfPlainNumber(pdfLineDiscount(line)),
+      total: pdfMoney(pdfLineTotal(line)),
+      vat: pdfRate(pdfLineVat(line))
+    }));
+    pdf.autoTable({
+      startY: y,
+      margin: { left: margin, right: margin },
+      columns,
+      body: sBody,
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 8.2, cellPadding: 3, lineColor: [204, 209, 216], lineWidth: 0.35, valign: 'middle', textColor: [20, 31, 46] },
+      headStyles: { fillColor: [255, 255, 255], textColor: [45, 49, 58], fontStyle: 'bold' },
+      columnStyles: { description: { cellWidth: 52 }, qty: { halign: 'right', cellWidth: 25 }, unit: { cellWidth: 20 }, unitPrice: { halign: 'right', cellWidth: 25 }, discount: { halign: 'right', cellWidth: 24 }, total: { halign: 'right', cellWidth: 28 }, vat: { halign: 'center', cellWidth: 20 } }
+    });
+    y = pdf.lastAutoTable.finalY + 6;
+  }
+
+  if (y > 222) { pdf.addPage(); y = 18; }
+  const bottomTop = y;
+  pdf.setDrawColor(220, 224, 230);
+  pdf.rect(margin, bottomTop, 118, 31);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8.5);
+  pdf.text('REMARQUES', margin + 2, bottomTop + 5);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.2);
+  const paymentLines = [];
+  const paymentAmount = doc.paymentAmount || doc.amountToPay || totals.clientTvac;
+  if (type === 'invoice' || type === 'reminder') paymentLines.push('Paiement : ' + pdfMoney(paymentAmount));
+  if (company.bank) paymentLines.push('Compte : ' + company.bank);
+  const comm = getPdfPaymentCommunication(doc, type);
+  if (comm) paymentLines.push('Communication : ' + comm);
+  if (doc.notes || doc.remark || doc.remarks) paymentLines.push(pdfClean(doc.notes || doc.remark || doc.remarks));
+  pdf.text(pdf.splitTextToSize(paymentLines.join('\n'), 112), margin + 2, bottomTop + 18);
+
+  const summaryRows = [
+    ['Total HTVA', pdfMoney(totals.clientHtva || item.clientHtva || item.amount || 0)],
+    ['Total TVA', pdfMoney(totals.clientVat || totals.vat || item.vat || 0)],
+    ['Total TVA incl.', pdfMoney(totals.clientTvac || item.tvac || 0)]
+  ];
+  pdf.autoTable({
+    startY: bottomTop,
+    margin: { left: 130, right: margin },
+    body: summaryRows,
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 3, lineColor: [204, 209, 216], lineWidth: 0.35 },
+    columnStyles: { 0: { cellWidth: 43 }, 1: { halign: 'right', fontStyle: 'bold', cellWidth: 31 } }
+  });
+
+  if (type === 'invoice' || type === 'reminder') {
+    const paid = pdfNumber(doc.paidAmount || doc.amountPaid || 0);
+    const balance = Math.max(0, pdfNumber(totals.clientTvac || item.tvac || 0) - paid);
+    pdf.autoTable({
+      startY: pdf.lastAutoTable.finalY + 5,
+      margin: { left: 130, right: margin },
+      body: [['Montant payé', pdfPlainNumber(paid)], ['Payé', pdfMoney(paid)], ['Solde', pdfMoney(balance)]],
+      theme: 'plain',
+      styles: { font: 'helvetica', fontSize: 8.2, cellPadding: 2 },
+      columnStyles: { 0: { cellWidth: 43 }, 1: { halign: 'right', fontStyle: 'bold', cellWidth: 31 } }
+    });
+  }
+
+  if (type === 'invoice' || type === 'reminder') {
+    pdf.addPage();
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.text(pdfDocTitle(type) + ' - Conditions', margin, 16);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.5);
+    const conditions = pdfClean(doc.conditions || payload.conditions || `Paiement : Toutes nos factures sont payables au comptant, sans escompte et au siège Bast Aménagement, ou à l’un de ses comptes bancaires, sauf stipulation contraire expresse. Toute réclamation concernant une quelconque mention sur les factures devra être faite dans les 8 jours suivant la réception des factures. Les frais de rappels sont facturés au client à concurrence de 15 EUR par facture à titre de frais administratifs. En cas de non-paiement à l’échéance, les sommes dues seront productives de plein droit et sans mise en demeure préalable d’un intérêt de 10 % l’an par mois de retard entamé. Le client est en outre tenu au paiement d’une indemnité complémentaire de 8.5 % du montant dû avec un minimum de 80,00 €. Toutes les autres factures, même non échues, deviennent exigibles de plein droit et sans mise en demeure préalable. L’entreprise se réserve la propriété des marchandises jusqu’au paiement total des factures.\n\nVeuillez retrouver et prendre connaissance de toutes les Conditions générales sur : https://www.bast-amenagement.com/conditions\n\nTaux de TVA à 6% : en l'absence de contestation par écrit dans un délai d'un mois à compter de la réception de la facture, le client est présumé reconnaître que les conditions légales d'application du taux réduit sont remplies. Si ces conditions ne sont pas remplies, le taux normal de TVA de 21 % sera applicable et le client endossera la responsabilité quant au paiement de la taxe, des intérêts et des amendes dus.`);
+    pdf.text(pdf.splitTextToSize(conditions, 190), margin, 25);
+  }
+
+  addPdfPageNumber(pdf);
+  return { pdf, filename: `${pdfDocPrefix(type)}-${number}.pdf`.replace(/[^a-z0-9._-]+/gi, '-') };
+}
+
+async function downloadCrmLinkedDocumentPdf(type, itemId) {
+  try {
+    const item = getLinkedDocumentItem(type, itemId);
+    if (!item) return notify('Document introuvable dans la fiche client.');
+    let payload = await getLinkedDocumentSourcePayload(type, item);
+    if (!payload && item.rawDocument) {
+      const key = moneyTypeToDocKey(type);
+      payload = { [key]: item.rawDocument, company: readFullCrmDataFromLocalStorage().company || {} };
+    }
+    if (!payload) return notify('Impossible de générer le PDF : source du document introuvable. Rechargez le document JSON ou Google Drive.');
+    notify('Génération du PDF en cours…');
+    const result = await buildCommercialDocumentPdf(type, item, payload);
+    result.pdf.save(result.filename);
+    notify('PDF téléchargé.');
+  } catch (error) {
+    console.error('Export PDF document impossible.', error);
+    notify('Erreur : le PDF n’a pas pu être généré.');
+  }
+}
+
+
+async function loadCrmLinkedDocumentInDevis(type, itemId) {
+  const project = getProject();
+  const item = getLinkedDocumentItem(type, itemId);
+
+  if (!project || !item) {
+    return notify('Document introuvable dans la fiche client.');
+  }
+
+  const docKey = moneyTypeToDocKey(type);
+  const payload = await getLinkedDocumentSourcePayload(type, item);
+
+  if (!payload?.[docKey]) {
+    return notify('Impossible de charger ce document : fichier source introuvable.');
+  }
+
+  const current = readFullCrmDataFromLocalStorage();
+  current[docKey] = payload[docKey];
+
+  if (Array.isArray(payload.clients) && payload.clients.length) current.clients = payload.clients;
+  if (payload.company) current.company = payload.company;
+  if (payload.mail) current.mail = payload.mail;
+
+  writeFullCrmDataToLocalStorage(current);
+
+  // Important : si le fileId a été réparé pendant le chargement, on nettoie les doublons.
+  const listName =
+    type === 'quote'
+      ? 'linkedQuotes'
+      : type === 'invoice'
+        ? 'linkedInvoices'
+        : 'linkedReminders';
+
+  if (Array.isArray(project[listName])) {
+    project[listName] = dedupeMoneyList(project[listName]);
+    saveLocalOnly();
+    renderMain();
+  }
+
+  try {
+    const targetOrigin =
+      window.location.origin && window.location.origin !== 'null'
+        ? window.location.origin
+        : '*';
+
+    window.parent?.postMessage({
+      type: 'BASTCOMPTA_OPEN_DEVIS_DOCUMENT',
+      docKey,
+      ref: item.ref || ''
+    }, targetOrigin);
+
+    notify(`${moneyTypeLabel(type)} ${item.ref || ''} chargé dans la Gestion commerciale.`);
+  } catch (error) {
+    console.warn('Ouverture Gestion commerciale impossible.', error);
+    notify(`${moneyTypeLabel(type)} ${item.ref || ''} chargé, mais ouverture automatique impossible.`);
+  }
+}
+
+async function downloadCrmLinkedDocument(type, itemId) {
+  const item = getLinkedDocumentItem(type, itemId);
+  if (!item) return notify('Document introuvable dans la fiche client.');
+  let text = '';
+  let filename = item.fileName || `${moneyTypeToDocKey(type)}-${item.ref || 'document'}.json`;
+  if (item.fileId && googleAccessToken) {
+    const response = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${item.fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    }, false);
+    if (response?.ok) text = await response.text();
+  }
+  if (!text) {
+    const payload = await getLinkedDocumentSourcePayload(type, item);
+    if (!payload) return notify('Impossible de télécharger ce document : source introuvable.');
+    text = JSON.stringify(payload, null, 2);
+  }
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function deleteCrmLinkedDocument(type, itemId) {
+  const project = getProject();
+  const item = getLinkedDocumentItem(type, itemId);
+  if (!project || !item) return notify('Document introuvable dans la fiche client.');
+
+  const listName = type === 'quote' ? 'linkedQuotes' : type === 'invoice' ? 'linkedInvoices' : 'linkedReminders';
+  const hasDriveFile = !!item.fileId;
+
+  const message = hasDriveFile
+    ? `Supprimer/retirer ${item.fileName || item.ref || 'ce document'} de cette fiche client ?`
+    : `Retirer ${moneyTypeLabel(type)} ${item.ref || ''} de cette fiche client ?`;
+
+  if (!confirm(message)) return;
+  notifyPortalBusinessChange('Document lié supprimé');
+
+  if (hasDriveFile && googleAccessToken) {
+    try {
+      const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${item.fileId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${googleAccessToken}` }
+      }, false);
+
+      if (res && !res.ok && res.status !== 404) {
+        console.warn('Suppression Drive impossible, retrait local quand même.');
+      }
+    } catch (err) {
+      console.warn('Fichier Drive déjà absent ou suppression impossible, retrait local quand même.', err);
+    }
+  }
+
+  const removeKey = String(item.documentUid || item.fileId || item.id || '').trim();
+
+  project[listName] = (project[listName] || []).filter(row =>
+    String(row.documentUid || row.fileId || row.id || '').trim() !== removeKey
+  );
+
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, `${moneyTypeLabel(type)} ${item.ref || ''} retiré de la fiche client.`);
+
+  await saveData(false);
+  renderMain();
+  notify('Document retiré de la fiche client.');
+}
+
+function renderDocumentsTab(project) {
+  return `
+        <div class="form-card">
+          <div class="section-head">
+            <div>
+              <h3 class="section-title">Documents client</h3>
+              <div class="hint">Ajoutez PDF, photos, preuves, plans ou documents. Avec Google Drive connecté, ils sont envoyés dans appDataFolder.</div>
+            </div>
+            <label class="file-label">
+              Ajouter fichier
+              <input type="file" multiple onchange="handleDocumentUpload(event)">
+            </label>
+          </div>
+
+          <div class="doc-list">
+            ${project.documents.length ? project.documents.map(doc => `
+              <div class="doc-item">
+                <div>
+                  <div class="doc-name">${escapeHtml(doc.name)}</div>
+                  <div class="doc-meta">${escapeHtml(doc.type || 'fichier')} • ${doc.size ? Math.round(doc.size / 1024) + ' Ko' : 'taille inconnue'} • ${escapeHtml(doc.addedAt || '')}</div>
+                </div>
+                <div class="inline-actions no-print">
+                  <button class="small" onclick="downloadDocument('${doc.id}')">Télécharger</button>
+                  <button class="small danger" onclick="deleteDocument('${doc.id}')">Supprimer</button>
+                </div>
+              </div>
+            `).join('') : '<div class="hint">Aucun document ajouté.</div>'}
+          </div>
+        </div>
+      `;
+}
+
+function renderTasksTab(project) {
+  return `
+        <div class="form-card">
+          <div class="section-head">
+            <h3 class="section-title">Tâches client</h3>
+            <button class="small primary" onclick="openTaskModal()">Ajouter une tâche</button>
+          </div>
+
+          <div class="task-list">
+            ${project.tasks.length ? project.tasks.map(task => `
+              <div class="task-item ${task.done ? 'done' : ''}">
+                <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleTask('${task.id}', this.checked)">
+                <div>
+                  <div class="task-title">${escapeHtml(task.title)}</div>
+                  <div class="task-due">Échéance : ${formatDate(task.dueDate)} ${task.assignedTo ? '• ' + escapeHtml(task.assignedTo) : ''}</div>
+                </div>
+                <button class="small danger no-print" onclick="deleteTask('${task.id}')">Supprimer</button>
+              </div>
+            `).join('') : '<div class="hint">Aucune tâche ajoutée.</div>'}
+          </div>
+        </div>
+      `;
+}
+
+function renderNotesTab(project) {
+  return `
+        <div class="form-card">
+          <div class="section-head">
+            <h3 class="section-title">Remarques</h3>
+            <button class="small primary" onclick="openNoteModal()">Ajouter une remarque</button>
+          </div>
+
+          <div class="note-list">
+            ${project.notes.length ? project.notes.map(note => `
+              <div class="note-item">
+                <div class="note-meta">${escapeHtml(note.dateLabel || '')}</div>
+                <div>${escapeHtml(note.text).replace(/\n/g, '<br>')}</div>
+                <div class="inline-actions no-print" style="margin-top:10px;">
+                  <button class="small danger" onclick="deleteNote('${note.id}')">Supprimer</button>
+                </div>
+              </div>
+            `).join('') : '<div class="hint">Aucune remarque ajoutée.</div>'}
+          </div>
+        </div>
+      `;
+}
+
+function renderHistoryTab(project) {
+  return `
+        <div class="form-card">
+          <div class="section-head">
+            <h3 class="section-title">Historique automatique</h3>
+          </div>
+
+          <div class="timeline-list">
+            ${project.timeline.length ? project.timeline.map(event => `
+              <div class="timeline-item">
+                <div class="timeline-meta">${new Date(event.date).toLocaleString('fr-BE')}</div>
+                <div>${escapeHtml(event.text)}</div>
+              </div>
+            `).join('') : '<div class="hint">Aucun événement enregistré.</div>'}
+          </div>
+        </div>
+      `;
+}
+
+function openProjectModal(id = '') {
+  editingProjectId = id;
+  const project = id ? data.projects.find(item => item.id === id) : null;
+
+  document.getElementById('projectModalTitle').textContent = project ? 'Modifier le client' : 'Nouveau client';
+  document.getElementById('formTitle').value = project?.title || '';
+  document.getElementById('formStatus').value = project?.status || 'planned';
+  document.getElementById('formClientName').value = project?.clientName || '';
+  document.getElementById('formClientRef').value = project?.clientRef || '';
+  BastDateInputs.setValue(document.getElementById('formStartDate'), project?.startDate || '');
+  BastDateInputs.setValue(document.getElementById('formEndDate'), project?.endDate || '');
+  document.getElementById('formAddress').value = project?.address || '';
+  document.getElementById('formDescription').value = project?.description || '';
+
+  document.getElementById('projectModalBackdrop').classList.add('open');
+}
+
+function closeProjectModal() {
+  document.getElementById('projectModalBackdrop').classList.remove('open');
+  editingProjectId = '';
+}
+
+async function submitProjectForm() {
+  const payload = {
+    title: document.getElementById('formTitle').value.trim(),
+    status: document.getElementById('formStatus').value,
+    clientName: document.getElementById('formClientName').value.trim(),
+    clientRef: document.getElementById('formClientRef').value.trim(),
+    startDate: BastDateInputs.value(document.getElementById('formStartDate')),
+    endDate: BastDateInputs.value(document.getElementById('formEndDate')),
+    address: document.getElementById('formAddress').value.trim(),
+    description: document.getElementById('formDescription').value.trim()
+  };
+
+  if (!payload.clientName) {
+    notify('Le nom du client est obligatoire.');
+    return;
+  }
+  payload.title = payload.clientName;
+  notifyPortalBusinessChange(editingProjectId ? 'Fiche client modifiée' : 'Fiche client créée');
+
+  if (editingProjectId) {
+    const project = data.projects.find(item => item.id === editingProjectId);
+    Object.assign(project, payload, { updatedAt: new Date().toISOString() });
+    addTimeline(project, 'Fiche client modifiée.');
+    selectedProjectId = project.id;
+  } else {
+    const project = normalizeProject({
+      ...payload,
+      id: uid('client'),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    addTimeline(project, 'Fiche client créée.');
+    data.projects.unshift(project);
+    selectedProjectId = project.id;
+  }
+
+  closeProjectModal();
+  await saveData();
+}
+
+function updateProjectField(field, value) {
+  const project = getProject();
+  if (!project) return;
+  notifyPortalBusinessChange('Fiche client modifiée');
+  project[field] = field === 'quoteAmount' ? Number(value) || 0 : value;
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, 'Champ "' + field + '" mis à jour.');
+  saveData(false);
+  render();
+}
+
+async function deleteProject(id) {
+  const project = data.projects.find(item => item.id === id);
+  if (!project) return;
+  if (!await BastUI.confirm('Placer le suivi client « ' + project.title + ' » dans la corbeille ?',{type:'danger',title:'Mettre le suivi à la corbeille',confirmLabel:'Mettre à la corbeille'})) return;
+  BastTrash.add({module:'Suivi client',type:'Client / chantier',label:project.title||'Suivi client',storageKey:STORAGE_KEY,path:['projects'],item:project});
+  notifyPortalBusinessChange('Fiche client placée dans la corbeille');
+
+  data.projects = data.projects.filter(item => item.id !== id);
+  selectedProjectId = data.projects[0]?.id || '';
+  await saveData();
+  notify('Suivi client placé dans la corbeille.');
+}
+
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#096;');
+}
+
+function normalizeLinkKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function roundMoney(value) {
+  return Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function loadDevisFactureData() {
+  try {
+    const raw = localStorage.getItem(DEVIS_FACTURE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (error) {
+    console.error('Impossible de lire les données de Gestion commerciale.', error);
+    return {};
+  }
+}
+
+function moneyLineHtva(line) {
+  const qty = Number(line?.qty ?? line?.quantity ?? 0) || 0;
+  const unitPrice = Number(line?.unitPrice ?? line?.price ?? 0) || 0;
+  const discount = Number(line?.discount ?? 0) || 0;
+  return qty * unitPrice * (1 - discount / 100);
+}
+
+function moneyLineVat(line) {
+  const vatRate = Number(line?.vatRate ?? line?.vat ?? 21) || 0;
+  return moneyLineHtva(line) * vatRate / 100;
+}
+
+function moneyLineCostHtva(line) {
+  if (line?.costTotal !== undefined && line.costTotal !== null && line.costTotal !== '') return Number(line.costTotal) || 0;
+  const qty = Number(line?.qty ?? line?.quantity ?? 0) || 0;
+  // Prix de revient interne. Si absent dans un ancien JSON, on reprend le prix facturé pour ne pas fausser l'ancien calcul.
+  const costPrice = Number(line?.costPrice ?? line?.purchasePrice ?? line?.cost ?? line?.unitCost ?? line?.unitPrice ?? line?.price ?? 0) || 0;
+  return qty * costPrice;
+}
+
+function documentTotals(doc) {
+  const lines = Array.isArray(doc?.lines) ? doc.lines : (Array.isArray(doc?.items) ? doc.items : []);
+  const suppliesLines = doc?.suppliesEnabled && Array.isArray(doc?.suppliesLines) ? doc.suppliesLines : [];
+
+  let workHtva = sum(lines.map(moneyLineHtva));
+  let workVat = sum(lines.map(moneyLineVat));
+  const suppliesSaleHtva = sum(suppliesLines.map(moneyLineHtva));
+  const suppliesVat = sum(suppliesLines.map(moneyLineVat));
+  const suppliesCostHtva = sum(suppliesLines.map(moneyLineCostHtva));
+
+  if (!workHtva) workHtva = Number(doc?.workHtva ?? doc?.htva ?? doc?.totalHtva ?? doc?.totalHTVA ?? doc?.totalHt ?? doc?.totalHT ?? doc?.amount ?? 0) || 0;
+  if (!workVat) workVat = Number(doc?.workVat ?? doc?.vat ?? doc?.totalVat ?? doc?.totalVAT ?? 0) || 0;
+
+  const clientHtva = roundMoney(workHtva + suppliesSaleHtva);
+  const clientVat = roundMoney(workVat + suppliesVat);
+  const clientTvac = Number(doc?.totalTvac ?? doc?.totalTVAC ?? doc?.totalTtc ?? doc?.totalTTC ?? 0) || (clientHtva + clientVat);
+
+  return {
+    htva: roundMoney(workHtva),
+    vat: roundMoney(workVat),
+    tvac: roundMoney(workHtva + workVat),
+    clientHtva,
+    clientVat,
+    clientTvac: roundMoney(clientTvac),
+    suppliesHtva: roundMoney(suppliesSaleHtva),
+    suppliesSaleHtva: roundMoney(suppliesSaleHtva),
+    suppliesCostHtva: roundMoney(suppliesCostHtva),
+    suppliesVat: roundMoney(suppliesVat),
+    suppliesTvac: roundMoney(suppliesSaleHtva + suppliesVat),
+    suppliesMarginHtva: roundMoney(suppliesSaleHtva - suppliesCostHtva)
+  };
+}
+
+function clientMatchesProject(project, doc) {
+  const projectClientId = String(project.clientId || '').trim();
+  const projectRef = String(project.clientRef || '').trim();
+
+  const docClientId = String(doc.clientId || '').trim();
+  const docRef = String(doc.clientNumber || doc.clientRef || '').trim();
+
+  return (!!projectClientId && projectClientId === docClientId)
+    || (!!projectRef && projectRef === docRef);
+}
+
+function buildCrmDocEntry(docKey, doc, source, fileMeta = {}) {
+  const number = String(doc?.documentNumber || '').trim();
+  const terrainDraftId = String(doc?.terrainDraftId || '').trim();
+  const isTerrainDraft = docKey === 'quote' && !number && terrainDraftId && doc?.transferredFromTerrain === true;
+  if (!number && !isTerrainDraft) return null;
+  const labels = { quote: 'Devis', invoice: 'Facture', reminder: 'Rappel' };
+  const lists = { quote: 'linkedQuotes', invoice: 'linkedInvoices', reminder: 'linkedReminders' };
+  const totals = documentTotals(doc);
+  const technicalRef = number || `terrain-${terrainDraftId}`;
+  const visibleRef = number || 'Brouillon Terrain';
+  return {
+    key: docKey,
+    list: lists[docKey],
+    ref: technicalRef,
+    displayRef: visibleRef,
+    uniqueKey: `${docKey}:${technicalRef}:${fileMeta.id || source}`,
+    label: labels[docKey],
+    date: doc.date || '',
+    description: number ? `${labels[docKey]} ${number}` : `Brouillon Terrain${doc.siteName ? ` · ${doc.siteName}` : ''}`,
+    amount: totals.clientHtva,
+    clientHtva: totals.clientHtva,
+    totalClientHtva: totals.clientHtva,
+    workHtva: totals.htva,
+    htva: totals.htva,
+    vat: totals.vat,
+    tvac: totals.clientTvac,
+    suppliesCost: totals.suppliesCostHtva,
+    suppliesCostHtva: totals.suppliesCostHtva,
+    costHtva: totals.suppliesCostHtva,
+    suppliesHtva: totals.suppliesHtva,
+    suppliesSaleHtva: totals.suppliesSaleHtva,
+    suppliesVat: totals.suppliesVat,
+    suppliesTvac: totals.suppliesTvac,
+    suppliesMarginHtva: totals.suppliesMarginHtva,
+    clientId: doc.clientId || '',
+    clientName: doc.clientName || '',
+    clientRef: doc.clientNumber || doc.clientRef || '',
+    siteName: doc.siteName || '',
+    source,
+    fileId: fileMeta.id || '',
+    fileName: fileMeta.name || '',
+    modifiedTime: fileMeta.modifiedTime || '',
+    rawDocument: doc || {}
+  };
+}
+
+function getLocalCrmDocumentsForProject(project) {
+  const devisData = loadDevisFactureData();
+  return ['quote', 'invoice', 'reminder']
+    .map(key => buildCrmDocEntry(key, devisData[key] || {}, 'localStorage'))
+    .filter(Boolean)
+    .filter(doc => clientMatchesProject(project, doc));
+}
+
+async function fetchDriveJson(fileId) {
+  const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${googleAccessToken}` }
+  }, false);
+  if (!res || !res.ok) return null;
+  try { return await res.json(); } catch { return null; }
+}
+
+async function getDriveCrmDocumentsForProject(project) {
+  if (!googleAccessToken) return [];
+  const list = await driveFilesList({
+    spaces: 'appDataFolder',
+    q: "mimeType='application/json' and trashed=false",
+    orderBy: 'modifiedTime desc',
+    pageSize: 100,
+    fields: 'files(id, name, modifiedTime)'
+  }, false);
+  if (!list) return [];
+  const files = (list.result.files || []).filter(file => /^(devis|facture|rappel)-.+\.json$/i.test(file.name || ''));
+  const docs = [];
+  for (const file of files) {
+    const parsed = await fetchDriveJson(file.id);
+    if (!parsed) continue;
+    const lowerName = String(file.name || '').toLowerCase();
+    const keys = lowerName.startsWith('devis-') ? ['quote'] : lowerName.startsWith('facture-') ? ['invoice'] : lowerName.startsWith('rappel-') ? ['reminder'] : [];
+    for (const key of keys) {
+      const entry = buildCrmDocEntry(key, parsed[key] || {}, 'Google Drive', file);
+      if (entry && clientMatchesProject(project, entry)) docs.push(entry);
+    }
+  }
+  return docs;
+}
+
+function extractCrmDocsFromJson(parsed, fileName = '') {
+  const docs = [];
+  const map = [
+    ['quote', parsed?.quote],
+    ['invoice', parsed?.invoice],
+    ['reminder', parsed?.reminder]
+  ];
+  for (const [key, doc] of map) {
+    const entry = buildCrmDocEntry(key, doc || {}, 'fichier PC', { name: fileName });
+    if (entry) docs.push(entry);
+  }
+  return docs;
+}
+
+async function handleCrmJsonFiles(event) {
+  const project = getProject();
+  const files = Array.from(event.target.files || []);
+  event.target.value = '';
+  if (!project || !files.length) return;
+  const docs = [];
+  for (const file of files) {
+    try {
+      const parsed = JSON.parse(await file.text());
+      docs.push(...extractCrmDocsFromJson(parsed, file.name));
+    } catch (error) {
+      console.error(error);
+      notify('Un fichier JSON n’a pas pu être lu : ' + file.name);
+    }
+  }
+  crmDocumentLinkCache = dedupeCrmDocs([...(crmDocumentLinkCache || []), ...docs.filter(doc => clientMatchesProject(project, doc))]);
+  renderCrmDocumentLinkModal();
+}
+
+let crmDocumentLinkCache = [];
+
+function dedupeCrmDocs(docs) {
+  const seen = new Set();
+
+  return docs.filter(doc => {
+    const key = String(
+      doc.uniqueKey ||
+      doc.documentUid ||
+      doc.fileId ||
+      `${doc.key}:${doc.ref}:${doc.source || ''}:${doc.fileName || ''}`
+    ).trim();
+
+    if (!key) return false;
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  }).sort((a, b) =>
+    String(b.date || '').localeCompare(String(a.date || '')) ||
+    String(a.label || '').localeCompare(String(b.label || ''))
+  );
+}
+
+function isMoneyLinked(project, type, ref) {
+  const list = type === 'quote'
+    ? project.linkedQuotes
+    : type === 'invoice'
+      ? project.linkedInvoices
+      : (project.linkedReminders || []);
+
+  const stableKey = `${type}:${normalizeLinkKey(ref || '')}`;
+
+  return (list || []).some(item => {
+    const itemType = String(item.docKey || type || '').trim();
+    const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
+    return `${itemType}:${itemRef}` === stableKey;
+  });
+}
+
+function crmDocStableKey(type, ref) {
+  return `${type}:${normalizeLinkKey(ref || '')}`;
+}
+
+function removeDocumentFromOtherProjects(currentProjectId, type, ref) {
+  const stableKey = crmDocStableKey(type, ref);
+
+  const listName = type === 'quote'
+    ? 'linkedQuotes'
+    : type === 'invoice'
+      ? 'linkedInvoices'
+      : 'linkedReminders';
+
+  data.projects.forEach(project => {
+    if (!project || project.id === currentProjectId) return;
+    if (!Array.isArray(project[listName])) return;
+
+    project[listName] = project[listName].filter(item => {
+      const itemType = String(item.docKey || type || '').trim();
+      const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
+      return `${itemType}:${itemRef}` !== stableKey;
+    });
+  });
+}
+
+async function toggleCrmDocumentLink(type, ref, checked, targetProjectId = selectedProjectId, forcedDoc = null) {
+  const project = data.projects.find(item => item.id === targetProjectId);
+  if (!project) return;
+
+  const doc = forcedDoc || crmDocumentLinkCache.find(item =>
+    item.key === type && String(item.ref) === String(ref)
+  );
+
+  if (!doc) return;
+
+  if (!clientMatchesProject(project, doc)) {
+    console.warn('Document refusé : client différent', { project, doc });
+    return;
+  }
+
+  const listName = doc.list;
+  if (!Array.isArray(project[listName])) project[listName] = [];
+
+  const stableKey = crmDocStableKey(type, doc.ref || ref || '');
+
+  if (checked) {
+    removeDocumentFromOtherProjects(project.id, type, doc.ref || ref);
+
+    const payload = {
+      id: `${type}-${doc.ref}`,
+      documentUid: stableKey,
+      date: doc.date,
+      ref: doc.ref,
+      displayRef: doc.displayRef || doc.ref,
+      description: doc.description,
+      amount: doc.clientHtva || doc.totalClientHtva || doc.htva,
+      clientHtva: doc.clientHtva || doc.totalClientHtva || doc.htva,
+      totalClientHtva: doc.clientHtva || doc.totalClientHtva || doc.htva,
+      workHtva: doc.workHtva || doc.htva,
+      htva: doc.htva,
+      vat: doc.vat,
+      tvac: doc.tvac,
+      suppliesCost: doc.suppliesCost ?? doc.suppliesCostHtva ?? doc.suppliesHtva ?? 0,
+      suppliesCostHtva: doc.suppliesCostHtva ?? doc.suppliesCost ?? doc.suppliesHtva ?? 0,
+      costHtva: doc.costHtva ?? doc.suppliesCostHtva ?? doc.suppliesCost ?? doc.suppliesHtva ?? 0,
+      suppliesHtva: doc.suppliesHtva || doc.suppliesSaleHtva || 0,
+      suppliesSaleHtva: doc.suppliesSaleHtva || doc.suppliesHtva || 0,
+      suppliesVat: doc.suppliesVat || 0,
+      suppliesTvac: doc.suppliesTvac || 0,
+      source: doc.source,
+      fileId: doc.fileId,
+      fileName: doc.fileName,
+      docKey: type,
+      suiviClientId: project.id,
+      chantierId: project.id,
+      clientId: doc.clientId,
+      clientName: doc.clientName,
+      clientRef: doc.clientRef,
+      siteName: doc.siteName || project.title,
+      rawDocument: doc.rawDocument || null
+    };
+
+    const existing = project[listName].find(item => {
+      const itemType = String(item.docKey || type || '').trim();
+      const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
+      return `${itemType}:${itemRef}` === stableKey;
+    });
+
+    if (existing) Object.assign(existing, payload);
+    else project[listName].push(payload);
+
+    project[listName] = dedupeMoneyList(project[listName]);
+
+    project.clientId = project.clientId || doc.clientId || '';
+    project.clientName = project.clientName || doc.clientName || '';
+    project.clientRef = project.clientRef || doc.clientRef || '';
+    addTimeline(project, `${doc.description} lié au client.`);
+  } else {
+    project[listName] = project[listName].filter(item => {
+      const itemType = String(item.docKey || type || '').trim();
+      const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
+      return `${itemType}:${itemRef}` !== stableKey;
+    });
+
+    addTimeline(project, `${doc.description} retiré du client.`);
+  }
+
+  project.updatedAt = new Date().toISOString();
+  await saveData(false);
+  renderMain();
+}
+
+async function linkAllClientCrmDocuments() {
+  for (const doc of crmDocumentLinkCache) {
+    // Met aussi à jour les documents déjà liés si une facture a été modifiée dans la Gestion commerciale.
+    await toggleCrmDocumentLink(doc.key, doc.ref, true);
+  }
+  closeGenericModal();
+  notify('Documents du client liés / mis à jour.');
+}
+
+async function openCrmDocumentLinkModal() {
+  const project = hydrateProjectWithCrm(getProject());
+  if (!project) return;
+  openGenericModal(`
+        <div class="modal-head">
+          <div>
+            <h2>Charger les documents du client</h2>
+            <div class="hint">Recherche automatique dans la Gestion commerciale${googleAccessToken ? ' et Google Drive' : ''} pour ${escapeHtml(project.clientName || project.clientRef || '')}...</div>
+          </div>
+          <button class="small ghost" onclick="closeGenericModal()">✕</button>
+        </div>
+        <div class="hint">Lecture du CRM / module Gestion commerciale…</div>
+      `);
+  const localDocs = getLocalCrmDocumentsForProject(project);
+  const driveDocs = await getDriveCrmDocumentsForProject(project);
+  crmDocumentLinkCache = dedupeCrmDocs([...localDocs, ...driveDocs]);
+  renderCrmDocumentLinkModal();
+}
+
+function renderCrmDocumentLinkModal() {
+  const project = getProject();
+  if (!project) return;
+  const docs = crmDocumentLinkCache || [];
+  openGenericModal(`
+        <div class="modal-head">
+          <div>
+            <h2>Documents du client</h2>
+            <div class="hint">Recherche CRM automatique conservée. Vous pouvez aussi ajouter des fichiers JSON depuis le PC en complément. Les montants sont recalculés depuis les lignes. Les factures alimentent le CA client et leurs fournitures deviennent automatiquement des coûts.</div>
+          </div>
+          <button class="small ghost" onclick="closeGenericModal()">✕</button>
+        </div>
+        <div class="modal-actions" style="justify-content:flex-start; margin-bottom:12px;">
+          ${docs.length ? '<button class="primary" onclick="linkAllClientCrmDocuments()">Tout lier / mettre à jour</button>' : ''}
+          <label class="file-label" style="box-shadow:none;">
+            Ajouter fichiers JSON depuis le PC
+            <input type="file" accept="application/json" multiple onchange="handleCrmJsonFiles(event)">
+          </label>
+        </div>
+        ${docs.length ? `
+          <div class="doc-list">
+            ${docs.map(doc => `
+              <label class="doc-item" style="grid-template-columns:22px 1fr; cursor:pointer;">
+                <input type="checkbox" ${isMoneyLinked(project, doc.key, doc.ref) ? 'checked' : ''} onchange="toggleCrmDocumentLink('${doc.key}', '${escapeAttr(doc.ref)}', this.checked)">
+                <div>
+                  <div class="doc-name">${escapeHtml(doc.label)} ${escapeHtml(doc.ref)} — ${formatMoney(doc.clientHtva || doc.totalClientHtva || doc.htva)} HTVA${Number(doc.suppliesHtva || doc.suppliesSaleHtva || doc.suppliesCost || 0) ? ' • Prestation : ' + formatMoney(doc.htva) + ' • Fournitures vendues : ' + formatMoney(doc.suppliesSaleHtva || doc.suppliesHtva || 0) + ' • Prix de revient : ' + formatMoney(doc.suppliesCost ?? doc.suppliesCostHtva ?? doc.suppliesHtva ?? 0) : ''}</div>
+                  <div class="doc-meta">Client : ${escapeHtml(doc.clientName || '—')} • N° client : ${escapeHtml(doc.clientRef || '—')} • Client doc : ${escapeHtml(doc.siteName || '—')} • Source : ${escapeHtml(doc.source)}${doc.fileName ? ' • ' + escapeHtml(doc.fileName) : ''}</div>
+                  <div class="inline-actions no-print" style="margin-top:8px;">
+                    <button class="small" type="button" onclick="event.preventDefault(); previewCrmDocumentFromCache('${doc.key}', '${escapeAttr(doc.ref)}')">Afficher</button>
+                    <button class="small" type="button" onclick="event.preventDefault(); loadCrmDocumentFromCacheInDevis('${doc.key}', '${escapeAttr(doc.ref)}')">Charger</button>
+                    <button class="small" type="button" onclick="event.preventDefault(); downloadCrmDocumentFromCache('${doc.key}', '${escapeAttr(doc.ref)}')">Télécharger</button>
+                    ${doc.fileId ? `<button class="small danger" type="button" onclick="event.preventDefault(); deleteCrmDocumentFromCache('${doc.key}', '${escapeAttr(doc.ref)}')">Supprimer</button>` : ''}
+                  </div>
+                </div>
+              </label>
+            `).join('')}
+          </div>
+        ` : `<div class="hint">Aucun document trouvé automatiquement pour ce client. Vérifiez le même nom client / n° client dans le client et dans le CRM, ou ajoutez les fichiers JSON depuis le PC avec le bouton ci-dessus.</div>`}
+        <div class="modal-actions"><button class="primary" onclick="closeGenericModal()">Terminer</button></div>
+      `);
+}
+
+function getCrmDocumentFromCache(type, ref) {
+  return (crmDocumentLinkCache || []).find(item => item.key === type && String(item.ref || '') === String(ref || '')) || null;
+}
+
+async function previewCrmDocumentFromCache(type, ref) {
+  const doc = getCrmDocumentFromCache(type, ref);
+  if (!doc) return notify('Document introuvable.');
+  const pseudoId = `${type}-${doc.ref}`;
+  const project = getProject();
+  if (project) {
+    const listName = doc.list;
+    if (!Array.isArray(project[listName])) project[listName] = [];
+    const stableKey = `${type}:${normalizeLinkKey(doc.ref || ref || '')}`;
+
+    const existing = project[listName].find(item => {
+      const itemType = String(item.docKey || type || '').trim();
+      const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
+      return `${itemType}:${itemRef}` === stableKey;
+    });
+
+    if (!existing) {
+      project[listName].push({
+        ...doc,
+        id: pseudoId,
+        documentUid: stableKey,
+        docKey: type,
+        amount: doc.clientHtva || doc.htva || 0
+      });
+    }
+  }
+  return previewCrmLinkedDocument(type, pseudoId);
+}
+
+async function loadCrmDocumentFromCacheInDevis(type, ref) {
+  const doc = getCrmDocumentFromCache(type, ref);
+  if (!doc) return notify('Document introuvable.');
+  await toggleCrmDocumentLink(type, ref, true);
+  return loadCrmLinkedDocumentInDevis(type, `${type}-${ref}`);
+}
+
+async function downloadCrmDocumentFromCache(type, ref) {
+  const doc = getCrmDocumentFromCache(type, ref);
+  if (!doc) return notify('Document introuvable.');
+  await toggleCrmDocumentLink(type, ref, true);
+  return downloadCrmLinkedDocument(type, `${type}-${ref}`);
+}
+
+async function deleteCrmDocumentFromCache(type, ref) {
+  const doc = getCrmDocumentFromCache(type, ref);
+  if (!doc?.fileId) return notify('Ce document n’a pas de fichier Drive à supprimer.');
+  if (!confirm(`Supprimer définitivement ${doc.fileName || doc.label + ' ' + doc.ref} de Google Drive ?`)) return;
+  const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${doc.fileId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${googleAccessToken}` }
+  }, false);
+  if (!res || !res.ok) return notify('Suppression Drive impossible.');
+  crmDocumentLinkCache = (crmDocumentLinkCache || []).filter(item => item.fileId !== doc.fileId);
+  const project = getProject();
+  if (project) {
+    const listName = doc.list;
+    const removeKey = `${type}:${normalizeLinkKey(doc.ref || ref || '')}`;
+
+    project[listName] = (project[listName] || []).filter(item => {
+      const itemType = String(item.docKey || type || '').trim();
+      const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
+      return `${itemType}:${itemRef}` !== removeKey;
+    });
+    await saveData(false);
+  }
+  renderCrmDocumentLinkModal();
+  renderMain();
+  notify('Document supprimé de Google Drive.');
+}
+
+function openInvoiceJsonImport() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json';
+  input.onchange = importInvoiceJsonToCurrentClient;
+  input.click();
+}
+
+async function saveInvoiceJsonFileToDrive(parsed, ref) {
+  if (!googleAccessToken) return null;
+
+  const fileName = `facture-${ref}.json`;
+  const content = JSON.stringify(parsed, null, 2);
+
+  const existing = await driveFilesList({
+    spaces: 'appDataFolder',
+    q: `name='${fileName.replace(/'/g, "\\'")}' and trashed=false`,
+    fields: 'files(id,name)'
+  }, false);
+
+  const files = existing?.result?.files || [];
+  const isUpdate = files.length > 0;
+
+  const metadata = isUpdate
+    ? { name: fileName }
+    : { name: fileName, parents: ['appDataFolder'] };
+
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', new Blob([content], { type: 'application/json' }));
+
+  const url = isUpdate
+    ? `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name,modifiedTime`
+    : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime`;
+
+  const res = await googleDriveFetch(url, {
+    method: isUpdate ? 'PATCH' : 'POST',
+    headers: { Authorization: `Bearer ${googleAccessToken}` },
+    body: form
+  });
+
+  if (!res || !res.ok) return null;
+  return await res.json();
+}
+
+async function importInvoiceJsonToCurrentClient(event) {
+  const project = getProject();
+  const file = event.target.files?.[0];
+  event.target.value = '';
+
+  if (!project || !file) return;
+
+  try {
+    const parsed = JSON.parse(await file.text());
+    const doc = parsed?.invoice;
+
+    if (!doc || !doc.documentNumber) {
+      notify("Ce fichier n'est pas une facture JSON valide.");
+      return;
+    }
+
+    const ref = String(doc.documentNumber).trim();
+    const driveFile = await saveInvoiceJsonFileToDrive(parsed, ref);
+
+    const entry = buildCrmDocEntry('invoice', doc, 'Google Drive', {
+      id: driveFile?.id || '',
+      name: driveFile?.name || `facture-${ref}.json`,
+      modifiedTime: driveFile?.modifiedTime || ''
+    });
+
+    if (!entry) {
+      notify("Facture impossible à lire.");
+      return;
+    }
+
+    entry.id = `invoice-${ref}`;
+    entry.documentUid = driveFile?.id || entry.uniqueKey || entry.id;
+    entry.fileId = driveFile?.id || '';
+    entry.fileName = driveFile?.name || `facture-${ref}.json`;
+    entry.rawDocument = doc;
+
+    if (!Array.isArray(project.linkedInvoices)) project.linkedInvoices = [];
+
+    project.linkedInvoices = project.linkedInvoices.filter(item =>
+      String(item.documentUid || item.fileId || item.id || '').trim() !== String(entry.documentUid || entry.fileId || entry.id || '').trim()
+    );
+
+    project.linkedInvoices.push(entry);
+    project.linkedInvoices = dedupeMoneyList(project.linkedInvoices);
+
+    project.updatedAt = new Date().toISOString();
+    addTimeline(project, `Facture importée : ${ref}`);
+
+    await saveData(false);
+    renderMain();
+
+    notify(driveFile?.id
+      ? `Facture ${ref} ajoutée au client et enregistrée dans Drive.`
+      : `Facture ${ref} ajoutée au client, mais Drive n'a pas été enregistré.`
+    );
+  } catch (error) {
+    console.error(error);
+    notify("Import impossible : fichier JSON invalide.");
+  }
+}
+
+function openMoneyModal(type) {
+  const labels = {
+    quote: 'Ajouter un devis (hors calcul)',
+    invoice: 'Ajouter une facture',
+    reminder: 'Ajouter un rappel',
+    cost: 'Ajouter un coût manuel'
+  };
+
+  openGenericModal(`
+        <div class="modal-head">
+          <div>
+            <h2>${labels[type]}</h2>
+            <div class="hint">Ajoutez un lien manuel. La connexion automatique avec la Gestion commerciale pourra être ajoutée ensuite.</div>
+          </div>
+          <button class="small ghost" onclick="closeGenericModal()">✕</button>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-row">
+            <label>Date</label>
+            <input id="moneyDate" type="date" value="${todayISO()}">
+          </div>
+          <div class="form-row">
+            <label>Référence</label>
+            <input id="moneyRef" placeholder="Ex. FAC-2026-001">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Description</label>
+          <textarea id="moneyDescription" placeholder="Description courte"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>Montant HTVA ou total utile au suivi</label>
+          <input id="moneyAmount" type="number" step="0.01" placeholder="0.00">
+        </div>
+
+        <div class="modal-actions">
+          <button class="ghost" onclick="closeGenericModal()">Annuler</button>
+          <button class="primary" onclick="submitMoneyItem('${type}')">Ajouter</button>
+        </div>
+      `);
+}
+
+async function submitMoneyItem(type) {
+  const project = getProject();
+  if (!project) return;
+
+  const item = {
+    id: uid(type),
+    date: BastDateInputs.value(document.getElementById('moneyDate')),
+    ref: document.getElementById('moneyRef').value.trim(),
+    description: document.getElementById('moneyDescription').value.trim(),
+    amount: Number(document.getElementById('moneyAmount').value) || 0
+  };
+
+  if (type === 'quote') project.linkedQuotes.push(item);
+  if (type === 'invoice') project.linkedInvoices.push(item);
+  if (type === 'reminder') {
+    if (!Array.isArray(project.linkedReminders)) project.linkedReminders = [];
+    project.linkedReminders.push(item);
+  }
+  if (type === 'cost') project.costs.push(item);
+
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, (type === 'quote' ? 'Devis' : type === 'invoice' ? 'Facture' : type === 'reminder' ? 'Rappel' : 'Coût') + ' ajouté : ' + (item.ref || formatMoney(item.amount)));
+
+  closeGenericModal();
+  notifyPortalBusinessChange('Élément financier enregistré');
+  await saveData();
+}
+
+async function deleteMoneyItem(type, id) {
+  const project = getProject();
+  if (!project) return;
+  if (!confirm('Supprimer cette ligne ?')) return;
+  notifyPortalBusinessChange('Élément financier supprimé');
+
+  if (type === 'quote') project.linkedQuotes = project.linkedQuotes.filter(item => item.id !== id);
+  if (type === 'invoice') project.linkedInvoices = project.linkedInvoices.filter(item => item.id !== id);
+  if (type === 'reminder') project.linkedReminders = (project.linkedReminders || []).filter(item => item.id !== id);
+  if (type === 'cost') project.costs = project.costs.filter(item => item.id !== id);
+
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, 'Ligne financière supprimée.');
+  await saveData();
+}
+
+function openTaskModal() {
+  openGenericModal(`
+        <div class="modal-head">
+          <div>
+            <h2>Ajouter une tâche</h2>
+            <div class="hint">Ex. commander matériel, envoyer acompte, rappeler client, réceptionner client.</div>
+          </div>
+          <button class="small ghost" onclick="closeGenericModal()">✕</button>
+        </div>
+
+        <div class="form-row">
+          <label>Tâche</label>
+          <input id="taskTitle" placeholder="Description de la tâche">
+        </div>
+
+        <div class="grid-2">
+          <div class="form-row">
+            <label>Échéance</label>
+            <input id="taskDueDate" type="date">
+          </div>
+          <div class="form-row">
+            <label>Assigné à</label>
+            <input id="taskAssignedTo" placeholder="Optionnel">
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="ghost" onclick="closeGenericModal()">Annuler</button>
+          <button class="primary" onclick="submitTask()">Ajouter</button>
+        </div>
+      `);
+}
+
+async function submitTask() {
+  const project = getProject();
+  if (!project) return;
+
+  const title = document.getElementById('taskTitle').value.trim();
+  if (!title) {
+    notify('La tâche est obligatoire.');
+    return;
+  }
+
+  project.tasks.unshift({
+    id: uid('task'),
+    title,
+    dueDate: BastDateInputs.value(document.getElementById('taskDueDate')),
+    assignedTo: document.getElementById('taskAssignedTo').value.trim(),
+    done: false
+  });
+
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, 'Tâche ajoutée : ' + title);
+  closeGenericModal();
+  notifyPortalBusinessChange('Tâche enregistrée');
+  await saveData();
+}
+
+async function toggleTask(id, done) {
+  const project = getProject();
+  const task = project?.tasks.find(item => item.id === id);
+  if (!task) return;
+
+  task.done = done;
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, 'Tâche ' + (done ? 'terminée' : 'réouverte') + ' : ' + task.title);
+  notifyPortalBusinessChange('État de tâche modifié');
+  await saveData(false);
+  renderMain();
+}
+
+async function deleteTask(id) {
+  const project = getProject();
+  if (!project) return;
+  notifyPortalBusinessChange('Tâche supprimée');
+  project.tasks = project.tasks.filter(item => item.id !== id);
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, 'Tâche supprimée.');
+  await saveData();
+}
+
+function openNoteModal() {
+  openGenericModal(`
+        <div class="modal-head">
+          <div>
+            <h2>Ajouter une remarque</h2>
+            <div class="hint">Notes client, décision client, problème technique, suivi, appel téléphonique...</div>
+          </div>
+          <button class="small ghost" onclick="closeGenericModal()">✕</button>
+        </div>
+
+        <div class="form-row">
+          <label>Remarque</label>
+          <textarea id="noteText" placeholder="Votre remarque"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button class="ghost" onclick="closeGenericModal()">Annuler</button>
+          <button class="primary" onclick="submitNote()">Ajouter</button>
+        </div>
+      `);
+}
+
+async function submitNote() {
+  const project = getProject();
+  if (!project) return;
+
+  const text = document.getElementById('noteText').value.trim();
+  if (!text) {
+    notify('La remarque est vide.');
+    return;
+  }
+
+  project.notes.unshift({
+    id: uid('note'),
+    text,
+    date: new Date().toISOString(),
+    dateLabel: nowLabel()
+  });
+
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, 'Remarque ajoutée.');
+  closeGenericModal();
+  notifyPortalBusinessChange('Note enregistrée');
+  await saveData();
+}
+
+async function deleteNote(id) {
+  const project = getProject();
+  if (!project) return;
+  notifyPortalBusinessChange('Note supprimée');
+  project.notes = project.notes.filter(item => item.id !== id);
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, 'Remarque supprimée.');
+  await saveData();
+}
+
+async function handleDocumentUpload(event) {
+  const project = getProject();
+  const files = Array.from(event.target.files || []);
+  event.target.value = '';
+  if (!project || !files.length) return;
+
+  for (const file of files) {
+    let driveFileId = '';
+    let driveDownloadable = false;
+
+    if (googleAccessToken) {
+      try {
+        const uploaded = await uploadFileToDrive(file, `client-${safeName(project.title)}-${Date.now()}-${file.name}`);
+        driveFileId = uploaded.id || '';
+        driveDownloadable = !!driveFileId;
+      } catch (error) {
+        console.error(error);
+        notify('Un fichier n’a pas pu être envoyé sur Drive : ' + file.name);
+      }
+    }
+
+    project.documents.unshift({
+      id: uid('doc'),
+      name: file.name,
+      type: file.type || 'application/octet-stream',
+      size: file.size,
+      addedAt: nowLabel(),
+      driveFileId,
+      driveDownloadable,
+      localOnly: !driveFileId
+    });
+
+    addTimeline(project, 'Document ajouté : ' + file.name);
+  }
+
+  project.updatedAt = new Date().toISOString();
+  await saveData();
+}
+
+function safeName(value) {
+  return String(value || 'client')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'client';
+}
+
+async function uploadFileToDrive(file, name) {
+  const metadata = { name, parents: ['appDataFolder'] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', file);
+
+  const response = await googleDriveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,mimeType', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${googleAccessToken}` },
+    body: form
+  });
+
+  if (!response || !response.ok) throw new Error(response ? await response.text() : 'Drive non disponible');
+  return response.json();
+}
+
+async function downloadDocument(id) {
+  const project = getProject();
+  const doc = project?.documents.find(item => item.id === id);
+  if (!doc) return;
+
+  if (!doc.driveFileId) {
+    notify('Ce document est référencé localement, mais son contenu n’est pas téléchargeable depuis cette session.');
+    return;
+  }
+
+  const response = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${doc.driveFileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${googleAccessToken}` }
+  });
+
+  if (!response || !response.ok) {
+    notify('Téléchargement impossible depuis Drive.');
+    return;
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = doc.name || 'document';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function deleteDocument(id) {
+  const project = getProject();
+  const doc = project?.documents.find(item => item.id === id);
+  if (!project || !doc) return;
+  if (!confirm('Supprimer ce document de la fiche client ?')) return;
+  notifyPortalBusinessChange('Document supprimé');
+
+  project.documents = project.documents.filter(item => item.id !== id);
+  project.updatedAt = new Date().toISOString();
+  addTimeline(project, 'Document retiré : ' + doc.name);
+
+  await saveData();
+}
+
+function openGenericModal(html) {
+  document.getElementById('genericModal').innerHTML = html;
+  document.getElementById('genericModalBackdrop').classList.add('open');
+}
+
+function closeGenericModal() {
+  document.getElementById('genericModalBackdrop').classList.remove('open');
+  document.getElementById('genericModal').innerHTML = '';
+}
+
+function beginSuiviClientLoading(message = 'Chargement du suivi client…') {
+  suiviClientLoadingCount += 1;
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  clearTimeout(notify._timer);
+  toast.innerHTML = `<span class="crm-loading-spinner" aria-hidden="true"></span><span>${escapeHtml(message)}</span>`;
+  toast.classList.add('show', 'is-loading');
+}
+
+function endSuiviClientLoading(message = '') {
+  suiviClientLoadingCount = Math.max(0, suiviClientLoadingCount - 1);
+  if (suiviClientLoadingCount > 0) return;
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.classList.remove('is-loading');
+  if (message) notify(message);
+  else toast.classList.remove('show');
+}
+
+function notify(message) {
+  const toast = document.getElementById('toast');
+  toast.classList.remove('is-loading');
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(notify._timer);
+  notify._timer = setTimeout(() => toast.classList.remove('show'), 3500);
+}
+
+function toggleFileMenu(event) {
+  event.stopPropagation();
+  document.getElementById('fileDropdown').classList.toggle('open');
+}
+
+function closeFileMenu() {
+  document.getElementById('fileDropdown').classList.remove('open');
+}
+
+function exportDataLocal() {
+  BastFileUtils.downloadJson(data, getLocalFileName());
+  notify('Fichier suivi client téléchargé.');
+}
+
+function getLocalFileName() {
+  const date = new Date().toISOString().slice(0, 10);
+  return `bastcompta-suivi-client-${date}.json`;
+}
+
+async function importDataLocal(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+
+  try {
+    const parsed = await BastFileUtils.parseJsonFile(file);
+
+    if (!parsed.projects && !parsed.crmClients && !parsed.meta) {
+      notify("Ce bouton sert uniquement à importer une sauvegarde complète du suivi client, pas une facture/devis JSON.");
+      return;
+    }
+
+    if (!confirm('Importer ce fichier remplacera les suivis clients actuels. Continuer ?')) return;
+
+    data = normalizeData(parsed);
+    selectedProjectId = '';
+    saveLocalOnly();
+    await saveData();
+    notify('Suivis clients importés.');
+  } catch (error) {
+    console.error(error);
+    notify('Import impossible : fichier invalide.');
+  }
+}
+
+async function exportJsonToDrive() {
+  if (!googleAccessToken) {
+    notify('Google Drive non connecté via le portail.');
+    return;
+  }
+
+  const ok = await saveSyncToDrive(true);
+  notify(ok ? 'Suivis clients sauvegardés sur Google Drive.' : 'Sauvegarde Drive impossible.');
+}
+
+async function loadFromDrive() {
+  if (!googleAccessToken) {
+    notify('Google Drive non connecté via le portail.');
+    return;
+  }
+
+  if (!confirm('Charger les suivis clients depuis Google Drive remplacera les données locales. Continuer ?')) return;
+
+  const ok = await loadSyncDataFromDriveIfAvailable();
+  notify(ok ? 'Suivis clients chargés depuis Google Drive.' : 'Aucun fichier suivi client trouvé sur Drive.');
+  render();
+}
+
+async function saveSyncToDrive(showErrorAlert = false) {
+  if (!googleAccessToken) return false;
+
+  try {
+    const content = JSON.stringify(data, null, 2);
+
+    const existing = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `name='${DRIVE_SYNC_FILE_NAME}' and trashed=false`,
+      fields: 'files(id, name)'
+    });
+
+    if (!existing) return false;
+
+    const files = existing.result.files || [];
+    const isUpdate = files.length > 0;
+    const metadata = isUpdate
+      ? { name: DRIVE_SYNC_FILE_NAME }
+      : { name: DRIVE_SYNC_FILE_NAME, parents: ['appDataFolder'] };
+
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([content], { type: 'application/json' }));
+
+    let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+    let method = 'POST';
+
+    if (isUpdate) {
+      url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+      method = 'PATCH';
+    }
+
+    const res = await googleDriveFetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${googleAccessToken}` },
+      body: form
+    });
+
+    return !!res && res.ok;
+  } catch (error) {
+    console.error(error);
+    if (showErrorAlert) alert('La sauvegarde Google Drive a échoué.');
+    return false;
+  }
+}
+
+async function loadSyncDataFromDriveIfAvailable() {
+  if (!googleAccessToken) return false;
+
+  try {
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `name='${DRIVE_SYNC_FILE_NAME}' and trashed=false`,
+      orderBy: 'modifiedTime desc',
+      pageSize: 1,
+      fields: 'files(id, name, modifiedTime)'
+    });
+
+    if (!list) return false;
+    const file = (list.result.files || [])[0];
+    if (!file) return false;
+
+    const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    });
+
+    if (!res || !res.ok) return false;
+
+    const parsed = await res.json();
+    data = normalizeData(parsed);
+    selectedProjectId = '';
+    saveLocalOnly();
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+}
+
+async function driveFilesList(params, showAlert401 = true) {
+  try {
+    if (window.gapi?.client?.drive?.files?.list) {
+      return await gapi.client.drive.files.list(params);
+    }
+
+    if (!googleAccessToken) return null;
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) query.set(key, value);
+    });
+    const response = await fetch('https://www.googleapis.com/drive/v3/files?' + query.toString(), {
+      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    });
+    if (await handleGoogleDriveAuthError(response.status, showAlert401)) return null;
+    if (!response.ok) return null;
+    return { result: await response.json() };
+  } catch (error) {
+    if (await handleGoogleDriveException(error, showAlert401)) return null;
+    console.error(error);
+    return null;
+  }
+}
+
+async function googleDriveFetch(url, options = {}, showAlert401 = true) {
+  const response = await BastComptaDriveClient.request(googleAccessToken, url, options);
+  if (await handleGoogleDriveAuthError(response.status, showAlert401)) return null;
+  return response;
+}
+
+function getSafeMessageOrigin() {
+  try {
+    return window.location.origin && window.location.origin !== 'null' ? window.location.origin : '*';
+  } catch {
+    return '*';
+  }
+}
+
+function postToParentSafely(message) {
+  try {
+    window.parent.postMessage(message, getSafeMessageOrigin());
+  } catch (error) {
+    console.warn('Message portail ignoré.', error);
+  }
+}
+
+function resetGoogleDriveSession() {
+  googleAccessToken = null;
+  if (window.gapi?.client) {
+    gapi.client.setToken(null);
+  }
+}
+
+function safePostToParent(message) {
+  try {
+    const targetOrigin = window.location.origin && window.location.origin !== 'null' ? window.location.origin : '*';
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(message, targetOrigin);
+    }
+  } catch (error) {
+    console.warn('Message portail ignoré.', error);
+  }
+}
+
+function notifyParentToRefreshGoogleToken() {
+  safePostToParent({ type: 'BASTCOMPTA_REFRESH_TOKEN' });
+}
+
+async function handleGoogleDriveAuthError(status, showAlert = true) {
+  if (status === 401) {
+    resetGoogleDriveSession();
+    notifyParentToRefreshGoogleToken();
+    if (showAlert) notify('Session Google Drive expirée. Reconnexion demandée au portail.');
+    return true;
+  }
+  return false;
+}
+
+function extractGoogleDriveErrorStatus(error) {
+  return error?.status || error?.result?.error?.code || error?.code || null;
+}
+
+async function handleGoogleDriveException(error, showAlert = true) {
+  return handleGoogleDriveAuthError(extractGoogleDriveErrorStatus(error), showAlert);
+}
+
+function printCurrentProject() {
+  if (!getProject()) {
+    notify('Aucun client à imprimer.');
+    return;
+  }
+  window.print();
+}
+
+function initGoogleMessages() {
+  window.addEventListener('message', async (event) => {
+    if (window.location.origin && window.location.origin !== 'null' && event.origin !== window.location.origin) return;
+    const message = event.data || {};
+
+    if (message.type === 'BASTCOMPTA_GOOGLE_TOKEN') {
+      googleAccessToken = message.accessToken || null;
+
+      if (googleAccessToken && window.gapi?.client) {
+        beginSuiviClientLoading('Chargement du suivi client et de Google Drive…');
+        try {
+          gapi.client.setToken({ access_token: googleAccessToken });
+          await loadSyncDataFromDriveIfAvailable();
+          await loadTerrainDraftsFromDrive();
+          await refreshCrmClientDropdown(false);
+          selectedProjectId = '';
+          render();
+          endSuiviClientLoading('Suivi client chargé.');
+        } catch (error) {
+          console.error(error);
+          endSuiviClientLoading('Suivi client chargé localement.');
+        }
+      }
+    }
+
+    if (message.type === 'BASTCOMPTA_GOOGLE_LOGOUT') {
+      resetGoogleDriveSession();
+      notify('Google Drive déconnecté.');
+    }
+
+    if (message.type === 'BASTCOMPTA_CHANTIERS_UPDATED') {
+      data = loadData();
+      render();
+    }
+
+    if (message.type === 'BASTCOMPTA_OPEN_CHANTIER') {
+      data = loadData();
+      const targetId = String(message.projectId || '');
+      if (targetId && data.projects.some(project => project.id === targetId)) {
+        selectedProjectId = targetId;
+        activeTab = 'summary';
+      }
+      render();
+    }
+  });
+
+  window.addEventListener('storage', (event) => {
+    if (event.key === STORAGE_KEY) {
+      data = loadData();
+      render();
+    }
+  });
+
+  safePostToParent({ type: 'BASTCOMPTA_DRIVE_STATUS_REQUEST' });
+}
+
+function initGapi() {
+  if (!window.gapi) return;
+  gapi.load('client', async () => {
+    try {
+      await gapi.client.init({
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+      });
+
+      if (googleAccessToken) {
+        beginSuiviClientLoading('Chargement du suivi client et de Google Drive…');
+        gapi.client.setToken({ access_token: googleAccessToken });
+        await loadSyncDataFromDriveIfAvailable();
+        await loadTerrainDraftsFromDrive();
+        await refreshCrmClientDropdown(false);
+        render();
+        endSuiviClientLoading('Suivi client chargé.');
+      }
+    } catch (error) {
+      console.error('Initialisation Google Drive impossible.', error);
+    }
+  });
+}
+
+document.addEventListener('click', event => {
+  if (!event.target.closest('#fileDropdown')) closeFileMenu();
+  if (!event.target.closest('.crm-draft-menu')) closeTerrainDraftMenus();
+});
+
+async function saveFromPortalGlobal(options = {}) {
+  const interceptedAlerts = [];
+  const originalAlert = window.alert;
+  if (options?.silent) {
+    window.alert = message => {
+      interceptedAlerts.push(String(message || ''));
+      console.info('Alerte Suivi client interceptée pendant la sauvegarde globale:', message);
+    };
+  }
+
+  try {
+    const ok = await saveData(false);
+    return {
+      ok: !!ok,
+      module: 'suivi-client',
+      local: !!ok,
+      drive: !!googleAccessToken && !!ok,
+      alertsIntercepted: interceptedAlerts.length
+    };
+  } finally {
+    if (options?.silent) window.alert = originalAlert;
+  }
+}
+
+window.BastComptaModule = {
+  name: 'Suivi client',
+  save: saveFromPortalGlobal,
+  saveData,
+  getChangeSnapshot: () => data,
+  getStatus: () => ({ ready: true, module: 'suivi-client' })
+};
+
+
+window.addEventListener('load', () => {
+  initGoogleMessages();
+  initGapi();
+  render();
+  setTimeout(() => {
+    renderCrmClientDropdown();
+    safePostToParent({ type: 'BASTCOMPTA_DRIVE_STATUS_REQUEST' });
+  }, 500);
+});
+
+// Actions rapides reçues depuis le menu latéral du portail.
+window.addEventListener('message', event => {
+  if (window.location.origin && window.location.origin !== 'null' && event.origin !== window.location.origin) return;
+  const message = event.data || {};
+  if (message.type !== 'BASTCOMPTA_CLIENT_ACTION') return;
+  if (message.action === 'new') window.openCrmClientModal?.();
+  if (message.action === 'overview') {
+    selectedProjectId = '';
+    render();
+    document.getElementById('searchInput')?.focus();
+  }
+});
