@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <script src="js/core/storage-keys.js"></script>
+  <script src="js/core/utils.js"></script>
+  <script src="js/core/formatters.js"></script>
+  <script src="js/core/file-utils.js"></script>
+  <script src="js/core/input-focus.js?v=20261101"></script>
+  <script src="js/core/drive-client.js"></script>
+  <script src="js/modules/accounting/calculations.js"></script>
+  <script src="js/modules/accounting/annual-json-drive.js"></script>
+  <script src="js/modules/accounting/exercise.js"></script>
+  <script src="js/modules/accounting/journals.js"></script>
+  <script src="js/modules/accounting/fixed-assets.js"></script>
+  <script src="js/modules/accounting/operating-ledger.js?v=20261021-km"></script>
+  <script src="js/modules/accounting/purchase-pdf-drive.js"></script>
+  <script src="js/modules/accounting/purchase-project-sync.js"></script>
+  <script src="js/modules/accounting/report-data.js?v=20261021-km"></script>
+  <script src="js/modules/accounting/report-template.js"></script>
+  <script src="js/modules/accounting/sales-import.js"></script>
+  <script src="js/modules/accounting/vat-regime.js"></script>
+  <script src="js/modules/accounting/vat-ui.js"></script>
+  <script src="js/modules/accounting/vat-periods.js"></script>
+  <script src="js/modules/accounting/vat-declaration.js"></script>
+  <script src="js/modules/accounting/financial-statements.js"></script>
+  <script src="js/modules/accounting/summary.js"></script>
+  <script src="js/core/access-control.js"></script>
+  <script>window.BastComptaAccess.requirePortalAccess();</script>
+  <script src="js/storage.js"></script>
+  <script src="js/trash.js?v=1"></script>
+  <script src="js/ui-feedback.js?v=1"></script>
+  <script src="js/keyboard-navigation.js?v=1"></script>
+  <script src="js/date-inputs.js?v=1"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comptabilité</title>
+  <link rel="stylesheet" href="css/base.css?v=4">
+  <link rel="stylesheet" href="css/comptabilite.css?v=20261021-km">
+  <script src="https://apis.google.com/js/api.js"></script>
+
+  <link rel="stylesheet" href="css/action-icons.css?v=5">
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title-wrap">
+        <h1>Comptabilité</h1>
+
+        <div class="top-actions">
+          <button onclick="goToPage('gdrive')">Google Drive</button>
+          <button onclick="goToPage('settings')">Paramètres</button>
+          <button id="intervatTopButton" data-bast-icon="intervat" onclick="openIntervat()">Intervat</button>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="dropdown">
+          <button type="button" class="dropdown-toggle" onclick="toggleFileMenu(event)">Fichier ▼</button>
+          <div class="dropdown-menu" id="fileMenu">
+            <button type="button" onclick="importDataLocal(); closeFileMenu()">Importer depuis ce PC</button>
+            <button type="button" onclick="exportDataLocal(); closeFileMenu()">Exporter vers ce PC</button>
+            <div class="dropdown-sep"></div>
+            <button type="button" data-bast-icon="drive-import" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google
+              Drive</button>
+            <button type="button" data-bast-icon="drive-export" onclick="exportJsonToDrive(); closeFileMenu()">Exporter vers Google Drive</button>
+          </div>
+        </div>
+        <button onclick="openPrintReport()">Export PDF / Imprimer</button>
+      </div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="card">
+        <div class="metric-label">Ventes HTVA</div>
+        <div class="metric-value" id="metricSales">0,00 €</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Achats HTVA</div>
+        <div class="metric-value" id="metricPurchases">0,00 €</div>
+      </div>
+      <div class="card" id="metricVatCard">
+        <div class="metric-label">TVA nette</div>
+        <div class="metric-value" id="metricVat">0,00 €</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Résultat estimé</div>
+        <div class="metric-value" id="metricProfit">0,00 €</div>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+    <div id="pages"></div>
+    <input id="localJsonImportInput" type="file" accept="application/json" style="display:none"
+      onchange="handleLocalJsonImport(event)">
+    <input id="localJsonToDriveInput" type="file" accept="application/json" multiple style="display:none"
+      onchange="uploadLocalJsonToDrive(event)">
+    <input id="purchasePdfUploadInput" type="file" accept="application/pdf" style="display:none"
+      onchange="handlePurchasePdfUpload(event)">
+  </div>
+
+  <script src="js/comptabilite.js?v=20261101-date-order"></script>
+  <script src="js/action-icons.js?v=5"></script>
+</body>
+
+</html>

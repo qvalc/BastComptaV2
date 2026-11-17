@@ -1,0 +1,25 @@
+{
+  "app": "BastCompta",
+  "version": 9,
+  "backupType": "complete-indexeddb-primary-css-separated-local-fallback-drive-pdf-crm-suivi-client-impots-ipp",
+  "contains": [
+    "application",
+    "localStorage",
+    "googleDriveAppData",
+    "crm",
+    "clients",
+    "devis",
+    "factures",
+    "rappels",
+    "pdf-fideles",
+    "comptabilite",
+    "suivi-client",
+    "manifest",
+    "css-separated",
+    "external-css",
+    "impots-ipp",
+    "declaration-impots",
+    "codes-fiscaux-belges"
+  ],
+  "note": "Version avec nouveau module Impôts IPP belge indépendant personne physique, relié au portail et aux données existantes sans modifier les modules métier terminés."
+}

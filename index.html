@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BastCompta - Gestion et comptabilité simplifiée pour indépendants belges</title>
+<meta content="BastCompta est un outil belge pour indépendants. Créez gratuitement vos devis, factures, rappels et tarifs, puis débloquez les modules avancés de comptabilité, TVA, IPP et sauvegardes." name="description"/>
+<meta content="index, follow, max-image-preview:large" name="robots"/>
+<meta content="Nicolas Sébastien" name="author"/>
+<meta content="BastCompta" name="application-name"/>
+<meta content="#2456d8" name="theme-color"/>
+<link href="https://bastcompta.bast-amenagement.com/" rel="canonical"/>
+<link href="logo.png" rel="icon" type="image/png"/>
+<link href="logo.png" rel="apple-touch-icon"/>
+<!-- Référencement social -->
+<meta content="website" property="og:type"/>
+<meta content="fr_BE" property="og:locale"/>
+<meta content="BastCompta" property="og:site_name"/>
+<meta content="BastCompta - Gestion et comptabilité simplifiée" property="og:title"/>
+<meta content="Devis, factures, rappels et onglet Tarifs gratuits sans limite de durée. Modules avancés de comptabilité, TVA, IPP et sauvegardes disponibles en Premium." property="og:description"/>
+<meta content="https://bastcompta.bast-amenagement.com/" property="og:url"/>
+<meta content="https://bastcompta.bast-amenagement.com/logo.png" property="og:image"/>
+<meta content="Logo BastCompta" property="og:image:alt"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="BastCompta - Gestion et comptabilité simplifiée" name="twitter:title"/>
+<meta content="Un outil simple pour les indépendants belges et les indépendants à titre complémentaire." name="twitter:description"/>
+<meta content="https://bastcompta.bast-amenagement.com/logo.png" name="twitter:image"/>
+<!-- Données structurées pour aider les moteurs à identifier BastCompta comme un logiciel -->
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "BastCompta",
+    "applicationCategory": "BusinessApplication",
+    "applicationSubCategory": "AccountingApplication",
+    "operatingSystem": "Web",
+    "url": "https://bastcompta.bast-amenagement.com/",
+    "image": "https://bastcompta.bast-amenagement.com/logo.png",
+    "description": "Outil belge de gestion, d'organisation et de comptabilité simplifiée conçu pour les indépendants et indépendants à titre complémentaire.",
+    "inLanguage": "fr-BE",
+    "audience": {
+      "@type": "Audience",
+      "audienceType": "Indépendants et indépendants à titre complémentaire en Belgique"
+    },
+    "offers": [
+      {
+        "@type": "Offer",
+        "name": "Module Gestion commerciale gratuit",
+        "description": "Accès gratuit sans limite de durée au module Gestion commerciale, y compris les devis, factures, rappels et tarifs.",
+        "price": "0",
+        "priceCurrency": "EUR"
+      },
+      {
+        "@type": "Offer",
+        "name": "BastCompta Premium mensuel",
+        "price": "4.99",
+        "priceCurrency": "EUR"
+      },
+      {
+        "@type": "Offer",
+        "name": "BastCompta Premium trimestriel",
+        "price": "12.99",
+        "priceCurrency": "EUR"
+      },
+      {
+        "@type": "Offer",
+        "name": "BastCompta Premium annuel",
+        "price": "49.99",
+        "priceCurrency": "EUR"
+      }
+    ],
+    "creator": {
+      "@type": "Person",
+      "name": "Nicolas Sébastien"
+    }
+  }
+  </script>
+<style>
+    .seo-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+  </style>
+<link href="css/base.css?v=4" rel="stylesheet"/>
+<link href="css/index.css?v=46" rel="stylesheet"/>
+<link href="css/portal/modals.css?v=1" rel="stylesheet"/>
+<link href="css/portal/shell.css?v=3" rel="stylesheet"/>
+<link href="css/portal/landing-help.css?v=3" rel="stylesheet"/>
+<script src="js/core/storage-keys.js"></script>
+<script src="js/core/utils.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/trash.js?v=1"></script>
+<script src="js/ui-feedback.js?v=1"></script>
+<script src="js/keyboard-navigation.js?v=1"></script>
+<script src="js/date-inputs.js?v=1"></script>
+<script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- Google Analytics -->
+<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-2QRJ0PMDLZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'G-2QRJ0PMDLZ');
+  </script>
+<!-- Microsoft Clarity -->
+<script type="text/javascript">
+    (function (c, l, a, r, i, t, y) {
+      c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments) };
+      t = l.createElement(r); t.async = 1; t.src = "https://www.clarity.ms/tag/" + i;
+      y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
+    })(window, document, "clarity", "script", "xe4e4n7ndi");
+  </script>
+</head>
+<body>
+<div class="app">
+<section id="authScreen">
+<div class="auth-layout">
+<div class="showcase">
+<div class="brand">
+<span class="showcase-eyebrow">BastCompta · Gestion d’entreprise</span>
+<h1>Gérez votre activité<br/>dans un seul espace</h1>
+<p>Devis, facturation, comptabilité et gestion d’activité, simplement.</p>
+</div>
+<div class="feature-grid">
+<a class="feature-card" href="#feature-gestion-commerciale">
+<div aria-hidden="true" class="feature-icon"><svg viewBox="0 0 24 24"><path d="M6 2.75h8l4 4V21.25H6zM14 2.75v4h4M9 11h6M9 15h6"/></svg></div>
+<div class="feature-copy"><h3>Gestion commerciale <span class="feature-free-label">Gratuit</span></h3><p>Créez vos devis et factures, gérez vos tarifs et suivez vos paiements.</p></div>
+</a>
+<a class="feature-card" href="#feature-suivi-client">
+<div aria-hidden="true" class="feature-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><path d="M2.75 19c.4-3.3 2.15-5 5.25-5s4.85 1.7 5.25 5M17 7v10M14.5 9.5 17 7l2.5 2.5"/></svg></div>
+<div class="feature-copy"><h3>Gestion d’activité</h3><p>Clients, chantiers, Mode Terrain et personnel réunis dans un même espace.</p></div>
+</a>
+<a class="feature-card" href="#feature-comptabilite">
+<div aria-hidden="true" class="feature-icon"><svg viewBox="0 0 24 24"><path d="M5 20.5V14h3.5v6.5M10.25 20.5V9h3.5v11.5M15.5 20.5V4h3.5v16.5"/></svg></div>
+<div class="feature-copy"><h3>Comptabilité</h3><p>Ventes, achats, investissements, TVA et résultats réunis dans un même espace.</p></div>
+</a>
+<a class="feature-card" href="#feature-declarations">
+<div aria-hidden="true" class="feature-icon"><svg viewBox="0 0 24 24"><path d="M6 2.75h8l4 4V21.25H6zM14 2.75v4h4M9 11h6M9 15h4"/><path d="M16.5 13.5v5M14 16h5"/></svg></div>
+<div class="feature-copy"><h3>Déclarations</h3><p>Préparez les informations utiles à vos déclarations IPP et TVA.</p></div>
+</a>
+</div>
+<div class="showcase-footer">
+<div aria-label="Avantages BastCompta" class="benefit-list">
+<span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 19h14"/></svg>Sans installation</span>
+<span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2.75 19 6v5.5c0 4.4-2.5 7.4-7 9.75-4.5-2.35-7-5.35-7-9.75V6zM9 12l2 2 4-4"/></svg>Sauvegardes sécurisées</span>
+</div>
+<div class="bottom-note">
+              © Nicolas Sébastien · BastCompta · bastcompta@outlook.be
+            </div>
+</div>
+</div>
+<div class="auth-card">
+<div class="auth-logo">
+<img alt="BastCompta - outil de gestion et de comptabilité simplifiée" src="logo.png"/>
+</div>
+<div class="auth-head">
+<h2>Connexion à votre espace</h2>
+<p>Identifiez-vous ou créez votre compte pour accéder au portail.</p>
+</div>
+<div class="auth-tabs">
+<button class="auth-tab active" data-auth-tab="login" type="button">Connexion</button>
+<button class="auth-tab" data-auth-tab="register" type="button">Créer un compte</button>
+<a class="auth-tab terrain-auth-tab" href="terrain.html">Mode terrain</a>
+</div>
+<form class="stack" id="loginForm">
+<div class="field-group">
+<label for="loginEmail">Adresse mail</label>
+<input autocomplete="email" id="loginEmail" placeholder="exemple@domaine.be" required="" type="email"/>
+</div>
+<div class="field-group">
+<label for="loginPassword">Mot de passe</label>
+<input autocomplete="current-password" id="loginPassword" placeholder="Votre mot de passe" required="" type="password"/>
+</div>
+<button class="primary" type="submit">Se connecter</button>
+<div class="inline-links">
+<button class="link-btn" id="forgotPasswordBtn" type="button">Mot de passe oublié</button>
+<span class="inline-note">Un email de réinitialisation pourra être envoyé.</span>
+</div>
+</form>
+<form class="stack hidden" id="registerForm">
+<div class="field-group">
+<label for="registerEmail">Adresse mail</label>
+<input autocomplete="email" id="registerEmail" placeholder="exemple@domaine.be" required="" type="email"/>
+</div>
+<div class="field-group">
+<label for="registerPassword">Mot de passe</label>
+<input autocomplete="new-password" id="registerPassword" minlength="8" placeholder="Minimum 8 caractères" required="" type="password"/>
+</div>
+<div class="field-group">
+<label for="registerPasswordConfirm">Confirmer le mot de passe</label>
+<input autocomplete="new-password" id="registerPasswordConfirm" minlength="8" placeholder="Répète le mot de passe" required="" type="password"/>
+</div>
+<button class="primary" type="submit">Créer le compte</button>
+<div class="hint">Après création, un email de vérification peut être envoyé.</div>
+</form>
+<div class="message" id="authMessage"></div>
+</div>
+</div>
+<div class="landing-site" id="decouvrir-bastcompta">
+<nav aria-label="Navigation de présentation" class="landing-nav">
+<a aria-label="Retour en haut" class="landing-nav-brand" href="#authScreen">
+<img alt="" aria-hidden="true" src="logo.png"/>
+<span>BastCompta</span>
+</a>
+<div class="landing-nav-links">
+<a href="#fonctionnalites">Fonctionnalités</a>
+<a href="#avantages">Avantages</a>
+<a href="#fonctionnement">Fonctionnement</a>
+<a href="#tarifs">Gratuit &amp; Premium</a>
+<a href="faq.html">FAQ</a>
+</div>
+<a class="landing-button landing-button-small landing-register-link" href="#authScreen">Créer un compte</a>
+</nav>
+<main class="landing-main">
+<section aria-labelledby="landingIntroTitle" class="landing-section landing-intro landing-reveal">
+<div class="landing-section-heading">
+<span class="landing-eyebrow">Un outil pensé en Belgique</span>
+<h2 id="landingIntroTitle">Toute votre activité indépendante, réunie au même endroit</h2>
+<p>
+                BastCompta centralise les tâches essentielles d'un indépendant : documents commerciaux,
+                suivi comptable, clients, préparation TVA et IPP, ainsi que les sauvegardes.
+                L'objectif est simple : vous permettre de gérer votre activité sans vous perdre dans un logiciel lourd.
+              </p>
+</div>
+<div aria-label="Les points forts de BastCompta" class="landing-stat-grid">
+<article class="landing-stat-card">
+<strong>1 portail</strong>
+<span>pour vos devis, factures, clients et données de gestion</span>
+</article>
+<article class="landing-stat-card">
+<strong>0 installation</strong>
+<span>un simple navigateur suffit pour accéder à BastCompta</span>
+</article>
+<article class="landing-stat-card">
+<strong>2 sauvegardes</strong>
+<span>possibilité de conserver une copie locale et une copie Google Drive</span>
+</article>
+<article class="landing-stat-card">
+<strong>Belgique</strong>
+<span>un fonctionnement adapté aux indépendants belges</span>
+</article>
+</div>
+</section>
+<section aria-labelledby="featuresTitle" class="landing-section" id="fonctionnalites">
+<div class="landing-section-heading landing-reveal">
+<span class="landing-eyebrow">Fonctionnalités</span>
+<h2 id="featuresTitle">Les outils essentiels, sans les menus inutiles</h2>
+<p>
+                Chaque module répond à un besoin concret de votre activité. Vous gardez une vue claire,
+                cohérente et accessible sur vos documents et vos chiffres.
+              </p>
+</div>
+<div class="landing-feature-grid">
+<article class="landing-feature-card landing-reveal" id="feature-gestion-commerciale">
+<span class="landing-card-icon">📄</span>
+<h3>Gestion commerciale — gratuit</h3>
+<p>Le module Gestion commerciale reste gratuit, sans limite de durée. Créez vos documents, préparez vos prix et suivez vos paiements depuis un même espace.</p>
+<ul>
+<li>Devis, factures et rappels personnalisables</li>
+<li>Onglet Tarifs pour enregistrer vos articles, prestations et prix habituels</li>
+<li>Reprise rapide d'un devis en facture</li>
+<li>PDF, communications structurées et préparation Peppol / Doccle</li>
+</ul>
+</article>
+<article class="landing-feature-card landing-reveal" id="feature-comptabilite">
+<span class="landing-card-icon">📊</span>
+<h3>Comptabilité simplifiée</h3>
+<p>Suivez les mouvements utiles à la gestion de votre activité sans transformer votre quotidien en cours de comptabilité.</p>
+<ul>
+<li>Ventes et achats</li>
+<li>Frais, taxes et cotisations</li>
+<li>Investissements et immobilisations</li>
+<li>Résultat et bilan simplifié</li>
+</ul>
+</article>
+<article class="landing-feature-card landing-reveal" id="feature-suivi-client">
+<span class="landing-card-icon">👥</span>
+<h3>Gestion d’activité</h3>
+<p>Centralisez vos clients, vos chantiers, le travail sur le terrain et la gestion du personnel.</p>
+<ul>
+<li>Clients, chantiers et documents liés</li>
+<li>Coûts, marges, notes et historique</li>
+<li>Mode Terrain pour les visites et interventions</li>
+<li>Gestion complète du personnel</li>
+</ul>
+</article>
+<article class="landing-feature-card landing-reveal" id="feature-declarations">
+<span class="landing-card-icon">📑</span>
+<h3>Préparation TVA</h3>
+<p>Regroupez vos ventes, achats et montants de TVA par période pour préparer plus sereinement vos contrôles.</p>
+<ul>
+<li>Périodes mensuelles ou trimestrielles</li>
+<li>TVA due et déductible</li>
+<li>Statuts payé et clôturé</li>
+<li>Contrôles avant déclaration</li>
+</ul>
+</article>
+<article class="landing-feature-card landing-reveal">
+<span class="landing-card-icon">🧾</span>
+<h3>Préparation IPP</h3>
+<p>Rassemblez les données utiles à votre déclaration en personne physique et obtenez une vue claire des chiffres préparés.</p>
+<ul>
+<li>Résumé fiscal</li>
+<li>Codes IPP</li>
+<li>Contrôles et détails</li>
+<li>Export d'un récapitulatif</li>
+</ul>
+</article>
+<article class="landing-feature-card landing-reveal">
+<span class="landing-card-icon">📱</span>
+<h3>Mode Terrain — inclus avec le Pack Gestion d’activité</h3>
+<p>Complétez le dossier pendant la visite et conservez immédiatement chaque information avec le bon client ou chantier.</p>
+<ul>
+<li>Création ou sélection du client sur place</li>
+<li>Lignes ajoutées depuis vos tarifs ou manuellement</li>
+<li>Remarques et photos liées au brouillon</li>
+<li>Reprise et finalisation du devis au bureau</li>
+</ul>
+</article>
+</div>
+</section>
+<section aria-labelledby="advantagesTitle" class="landing-section landing-split-section" id="avantages">
+<div class="landing-benefit-panel landing-reveal">
+<span class="landing-eyebrow">Pourquoi BastCompta ?</span>
+<h2 id="advantagesTitle">Conçu pour rester simple, même quand votre activité évolue</h2>
+<p>
+                BastCompta ne cherche pas à remplacer votre comptable ni les plateformes officielles.
+                Il vous aide à mieux préparer, classer et contrôler les informations avant vos démarches.
+              </p>
+<div class="landing-check-list">
+<div><span>✓</span><p><strong>Pensé pour les indépendants</strong> et particulièrement les activités complémentaires.</p></div>
+<div><span>✓</span><p><strong>Une interface cohérente</strong> pour éviter les doubles encodages inutiles.</p></div>
+<div><span>✓</span><p><strong>Accessible partout</strong> depuis un ordinateur équipé d'un navigateur.</p></div>
+<div><span>✓</span><p><strong>Vos données restent exportables</strong> grâce aux sauvegardes ZIP.</p></div>
+<div><span>✓</span><p><strong>Des mises à jour régulières</strong> pour faire évoluer les fonctionnalités.</p></div>
+</div>
+</div>
+<div aria-label="Aperçu illustré de BastCompta" class="landing-dashboard-preview landing-reveal">
+<div class="landing-preview-top">
+<span></span><span></span><span></span>
+<strong>BastCompta</strong>
+</div>
+<div class="landing-preview-body">
+<aside>
+<b>▤ Gestion commerciale</b>
+<span>▥ Comptabilité</span>
+<span>♙ Gestion d’activité</span>
+<span>▧ Impôts IPP</span>
+<span>⚙ Sauvegardes</span>
+</aside>
+<div class="landing-preview-content">
+<div class="landing-preview-title">
+<div><small>Vue générale</small><strong>Votre activité</strong></div>
+<span>Synchronisé</span>
+</div>
+<div class="landing-preview-metrics">
+<div><small>Ventes</small><strong>12 480 €</strong></div>
+<div><small>Achats</small><strong>4 260 €</strong></div>
+<div><small>Résultat estimé</small><strong>8 220 €</strong></div>
+</div>
+<div class="landing-preview-chart">
+<i style="height:34%"></i><i style="height:52%"></i><i style="height:44%"></i>
+<i style="height:72%"></i><i style="height:63%"></i><i style="height:88%"></i>
+</div>
+<div class="landing-preview-lines">
+<span></span><span></span><span></span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section aria-labelledby="terrainTitle" class="landing-section landing-split-section" id="mode-terrain">
+<div class="landing-benefit-panel landing-reveal">
+<span class="landing-eyebrow">Mode Terrain</span>
+<h2 id="terrainTitle">Emportez le suivi de votre activité sur le terrain</h2>
+<p>
+                Sur place, sélectionnez un client ou créez sa fiche, retrouvez son chantier et joignez immédiatement
+                vos remarques et vos photos. Toutes les informations restent rattachées au bon dossier dans le Suivi client.
+              </p>
+<p>
+                Vous pouvez également préparer les prestations et un brouillon de devis pendant la visite,
+                puis le reprendre au bureau pour ajuster les descriptions, les quantités et les prix.
+              </p>
+<div class="landing-check-list">
+<div><span>✓</span><p><strong>Inclus dans le Pack Gestion d’activité</strong> et dans Premium.</p></div>
+<div><span>✓</span><p><strong>Les photos et remarques restent liées</strong> au client et au bon brouillon.</p></div>
+<div><span>✓</span><p><strong>Aucun double encodage :</strong> le devis commencé sur place est celui repris au bureau.</p></div>
+</div>
+</div>
+<div aria-label="Aperçu illustré du Mode Terrain" class="landing-dashboard-preview landing-reveal">
+<div class="landing-preview-top">
+<span></span><span></span><span></span>
+<strong>Mode Terrain</strong>
+</div>
+<div class="landing-preview-body">
+<aside>
+<b>📱 Visite chantier</b>
+<span>👤 Client</span>
+<span>＋ Prestations</span>
+<span>📷 Photos</span>
+<span>📝 Brouillons</span>
+</aside>
+<div class="landing-preview-content">
+<div class="landing-preview-title">
+<div><small>Gestion d’activité</small><strong>Intervention sur place</strong></div>
+<span>Brouillon</span>
+</div>
+<div class="landing-preview-metrics">
+<div><small>Client</small><strong>Enregistré</strong></div>
+<div><small>Lignes</small><strong>6</strong></div>
+<div><small>Photos</small><strong>4</strong></div>
+</div>
+<div class="landing-preview-lines">
+<span></span><span></span><span></span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section aria-labelledby="stepsTitle" class="landing-section" id="fonctionnement">
+<div class="landing-section-heading landing-reveal">
+<span class="landing-eyebrow">Comment ça fonctionne ?</span>
+<h2 id="stepsTitle">Commencez rapidement, puis avancez à votre rythme</h2>
+<p>La logique de BastCompta suit simplement le déroulement réel de votre activité.</p>
+</div>
+<div class="landing-steps">
+<article class="landing-step landing-reveal">
+<span>01</span>
+<h3>Créez votre compte</h3>
+<p>Inscrivez-vous avec votre adresse mail et accédez à votre espace personnel.</p>
+</article>
+<article class="landing-step landing-reveal">
+<span>02</span>
+<h3>Configurez vos informations</h3>
+<p>Ajoutez vos coordonnées, paramètres de facturation et préférences de sauvegarde.</p>
+</article>
+<article class="landing-step landing-reveal">
+<span>03</span>
+<h3>Gérez vos documents</h3>
+<p>Créez vos clients, devis, factures, achats et autres données utiles.</p>
+</article>
+<article class="landing-step landing-reveal">
+<span>04</span>
+<h3>Préparez vos devis sur le terrain</h3>
+<p>Créez ou sélectionnez le client, ajoutez les prestations, les remarques et les photos, puis enregistrez en brouillon.</p>
+</article>
+<article class="landing-step landing-reveal">
+<span>05</span>
+<h3>Finalisez au bureau</h3>
+<p>Reprenez votre brouillon, ajustez les derniers détails puis envoyez le devis au client.</p>
+</article>
+</div>
+</section>
+<section aria-labelledby="pricingTitle" class="landing-section landing-pricing-section" id="tarifs">
+<div class="landing-section-heading landing-reveal">
+<span class="landing-eyebrow">Gratuit pour commencer</span>
+<h2 id="pricingTitle">La Gestion commerciale reste gratuite</h2>
+<p>
+                Créez votre compte et utilisez gratuitement le module Gestion commerciale,
+                y compris l'onglet Tarifs pour enregistrer vos prestations, articles et prix habituels.
+                L'abonnement sert uniquement à débloquer les autres modules avancés de BastCompta.
+              </p>
+</div>
+<div class="landing-free-plan landing-reveal">
+<div class="landing-free-plan-main">
+<span aria-hidden="true" class="landing-free-icon">🎁</span>
+<div>
+<span class="landing-price-label">Gratuit sans limite de durée</span>
+<h3>Gestion commerciale</h3>
+<p>
+                    Une base complète pour créer vos documents commerciaux et gérer vos prix,
+                    sans abonnement et sans carte bancaire.
+                  </p>
+</div>
+<div class="landing-free-price">
+<strong>0 €</strong>
+<span>pour toujours*</span>
+</div>
+</div>
+<div class="landing-free-features">
+<div><span>✓</span><strong>Devis</strong><small>création, impression PDF et suivi</small></div>
+<div><span>✓</span><strong>Factures</strong><small>documents professionnels et numérotation</small></div>
+<div><span>✓</span><strong>Onglet Tarifs</strong><small>articles, prestations, unités et prix habituels</small></div>
+<div><span>✓</span><strong>Rappels</strong><small>suivi des factures et communications</small></div>
+<div><span>✓</span><strong>Reprise de documents</strong><small>transformez rapidement un devis en facture</small></div>
+<div><span>✓</span><strong>Google Drive</strong><small>sauvegardes et synchronisation incluses gratuitement</small></div>
+</div>
+<div class="landing-free-action">
+<p>Aucune carte bancaire nécessaire.</p>
+<a class="landing-button landing-register-link" href="#authScreen">Créer mon compte gratuitement</a>
+</div>
+</div>
+<div class="landing-premium-heading landing-reveal">
+<span class="landing-eyebrow">BastCompta Premium</span>
+<h3>Besoin d'aller plus loin ?</h3>
+<p>
+                Ajoutez uniquement le pack dont vous avez besoin : Comptabilité avec TVA, IPP et Peppol,
+                Gestion d’activité pour les clients, les chantiers, le terrain et le personnel, ou Premium pour tout débloquer. Google Drive reste gratuit.
+              </p>
+</div>
+<div class="landing-premium-features landing-reveal">
+<span>📊 Comptabilité complète</span>
+<span>📑 Préparation TVA</span>
+<span>🧾 Préparation IPP</span>
+<span>👥 Gestion d’activité : clientèle et chantiers</span>
+<span>📱 Mode Terrain et gestion complète du personnel</span>
+<span>🔁 Google Drive gratuit</span>
+<span>📈 Résultat et bilan simplifié</span>
+</div>
+<div class="landing-pricing-grid landing-pack-grid">
+<article class="landing-price-card landing-reveal">
+<span class="landing-price-label">Comptabilité</span>
+<h3>Pack Comptabilité</h3>
+<div class="landing-price"><strong>2,99 €</strong><span>/ mois</span></div>
+<p>Comptabilité, TVA, IPP, Peppol, investissements et résultats.</p>
+<a class="landing-button landing-register-link" href="#authScreen">Choisir Comptabilité</a>
+</article>
+<article class="landing-price-card landing-reveal">
+<span class="landing-price-label">Clients, terrain &amp; personnel</span>
+<h3>Pack Gestion d’activité</h3>
+<div class="landing-price"><strong>2,49 €</strong><span>/ mois</span></div>
+<p>Fiches clients, historique, notes, rappels, chantiers et Mode Terrain, avec gestion complète du personnel : salaires, prestations, congés, maladies, primes, documents, formations et matériel.</p>
+<a class="landing-button landing-register-link" href="#authScreen">Choisir Gestion d’activité</a>
+</article>
+<article class="landing-price-card landing-price-featured landing-reveal">
+<span class="landing-price-badge">Meilleur rapport qualité/prix</span>
+<span class="landing-price-label">Tout inclus</span>
+<h3>Premium</h3>
+<div class="landing-price"><strong>4,99 €</strong><span>/ mois</span></div>
+<p>Tous les modules, dont le Pack Gestion d’activité, ainsi que les futures fonctions Premium.</p>
+<a class="landing-button landing-register-link" href="#authScreen">Choisir Premium</a>
+</article>
+</div>
+<p class="landing-pricing-note landing-reveal">
+              * Le module Gestion commerciale, les sauvegardes et Google Drive restent gratuits sans limite de durée. Le Mode Terrain et le Personnel sont inclus dans le Pack Gestion d’activité et Premium.
+              BastCompta reste un outil d'aide à la gestion et à la préparation administrative :
+              il ne remplace pas un comptable, Tax-on-web, Intervat ou une plateforme officielle.
+            </p>
+</section>
+<section aria-labelledby="ctaTitle" class="landing-section landing-cta landing-reveal">
+<div>
+<span class="landing-eyebrow">Commencez gratuitement</span>
+<h2 id="ctaTitle">Créez vos premiers devis et factures</h2>
+<p>Le module Gestion commerciale, avec les devis, factures, rappels et tarifs, est gratuit sans limite de durée. Les modules Premium restent disponibles lorsque vous en avez besoin.</p>
+</div>
+<div class="landing-cta-actions">
+<a class="landing-button landing-register-link" href="#authScreen">Créer mon compte gratuitement</a>
+<a class="landing-button landing-button-secondary" href="mailto:bastcompta@outlook.be">Poser une question</a>
+</div>
+</section>
+</main>
+<footer class="landing-footer">
+<div class="landing-footer-brand">
+<img alt="BastCompta" src="logo.png"/>
+<p>Gestion · Comptabilité · Simplicité</p>
+</div>
+<div class="landing-footer-links">
+<a href="#fonctionnalites">Fonctionnalités</a>
+<a href="#tarifs">Gratuit &amp; Premium</a>
+<a href="faq.html">FAQ</a>
+<a href="mailto:bastcompta@outlook.be">Contact</a>
+</div>
+<p>© Nicolas Sébastien · BastCompta · Belgique</p>
+</footer>
+</div>
+</section>
+<section class="hidden" id="portalScreen">
+<div class="portal-shell">
+<aside aria-label="Navigation principale" class="portal-sidebar" id="portalSidebar">
+<div class="sidebar-brand">
+<img alt="BastCompta" src="logo.png"/>
+<button aria-label="Fermer le menu" class="sidebar-close" id="sidebarCloseBtn" type="button">✕</button>
+</div>
+<nav class="sidebar-nav">
+<div class="sidebar-nav-scroll">
+<button class="sidebar-home active" data-main-tab="dashboard" type="button">
+<span class="sidebar-icon">⌂</span><span>Tableau de bord</span>
+</button>
+<div class="sidebar-group open" data-sidebar-group="devis">
+<button aria-expanded="true" class="main-tab sidebar-module" data-main-tab="devis" type="button">
+<span class="sidebar-icon">▤</span><span>Gestion commerciale</span><span class="sidebar-chevron">⌄</span>
+</button>
+<div class="sidebar-submenu">
+<button data-main-tab="devis" data-page-key="quote" type="button">Devis</button>
+<button data-main-tab="devis" data-page-key="invoice" type="button">Factures</button>
+<button data-main-tab="devis" data-page-key="tarifs" type="button">Tarifs</button>
+<button data-main-tab="devis" data-page-key="suppliers" type="button">Fournisseurs</button>
+<button data-main-tab="devis" data-page-key="reminder" type="button">Rappels</button>
+<button data-main-tab="devis" data-page-key="sent" type="button">Messages envoyés</button>
+<button data-main-tab="devis" data-page-key="communication" type="button">Communications
+                  structurées</button>
+<button data-main-tab="devis" data-page-key="peppol" type="button">Peppol / Doccle</button>
+<button data-main-tab="devis" data-page-key="settings" type="button">Paramètres du module</button>
+</div>
+</div>
+<div class="sidebar-group" data-sidebar-group="compta">
+<button aria-expanded="false" class="main-tab sidebar-module" data-main-tab="compta" type="button">
+<span class="sidebar-icon">▥</span><span>Comptabilité</span><span class="sidebar-chevron">⌄</span>
+</button>
+<div class="sidebar-submenu">
+<button data-main-tab="compta" data-page-key="sales" type="button">Ventes</button>
+<button data-main-tab="compta" data-page-key="purchases" type="button">Achats</button>
+<button data-main-tab="compta" data-page-key="investments" type="button">Investissements</button>
+<button data-main-tab="compta" data-page-key="assets" type="button">Immobilisations</button>
+<button data-main-tab="compta" data-page-key="losses" type="button">Taxes &amp; cotisations</button>
+<button data-main-tab="compta" data-page-key="stock" type="button">Stock</button>
+<button data-main-tab="compta" data-page-key="km" type="button">Kilomètres</button>
+<button data-main-tab="compta" data-page-key="private" type="button">Prélèvements de l'exploitant</button>
+<button data-main-tab="compta" data-page-key="result" type="button">Compte de résultat</button>
+<button data-main-tab="compta" data-page-key="balance" type="button">Bilan simplifié</button>
+<button data-main-tab="compta" data-page-key="vat" type="button">TVA</button>
+</div>
+</div>
+<div class="sidebar-group" data-sidebar-group="chantier">
+<button aria-expanded="false" class="main-tab sidebar-module" data-main-tab="chantier" type="button">
+<span class="sidebar-icon">♙</span><span>Suivi client</span><span class="sidebar-chevron">⌄</span>
+</button>
+<div class="sidebar-submenu">
+<button data-client-action="overview" data-main-tab="chantier" type="button">Vue clients</button>
+<button data-client-action="new" data-main-tab="chantier" type="button">Nouveau client CRM</button>
+</div>
+</div>
+<div class="sidebar-group" data-sidebar-group="personnel">
+<button aria-expanded="false" class="main-tab sidebar-module" data-main-tab="personnel" type="button">
+<span class="sidebar-icon">♟</span><span>Personnel</span><span class="sidebar-chevron">⌄</span>
+</button>
+<div class="sidebar-submenu">
+<button data-main-tab="personnel" data-page-key="summary" type="button">Tableau de bord</button>
+<button data-main-tab="personnel" data-page-key="workers" type="button">Travailleurs</button>
+<button data-main-tab="personnel" data-page-key="salary" type="button">Salaires</button>
+<button data-main-tab="personnel" data-page-key="time" type="button">Prestations</button>
+<button data-main-tab="personnel" data-page-key="leave" type="button">Congés</button>
+<button data-main-tab="personnel" data-page-key="absence" type="button">Maladies &amp; absences</button>
+<button data-main-tab="personnel" data-page-key="bonus" type="button">Primes &amp; avantages</button>
+<button data-main-tab="personnel" data-page-key="document" type="button">Documents</button>
+<button data-main-tab="personnel" data-page-key="training" type="button">Formations</button>
+<button data-main-tab="personnel" data-page-key="equipment" type="button">Matériel</button>
+</div>
+</div>
+<div class="sidebar-group" data-sidebar-group="impots">
+<button aria-expanded="false" class="main-tab sidebar-module" data-main-tab="impots" type="button">
+<span class="sidebar-icon">▧</span><span>Impôts IPP</span><span class="sidebar-chevron">⌄</span>
+</button>
+<div class="sidebar-submenu">
+<button data-main-tab="impots" data-page-key="summary" type="button">Résumé fiscal</button>
+<button data-main-tab="impots" data-page-key="codes" type="button">Codes IPP</button>
+<button data-main-tab="impots" data-page-key="checks" type="button">Contrôles</button>
+<button data-main-tab="impots" data-page-key="details" type="button">Détails des chiffres</button>
+<button data-main-tab="impots" data-page-key="manual" type="button">Réglages / manuel</button>
+</div>
+</div>
+</div>
+<button class="sidebar-home sidebar-terrain" data-main-tab="terrain" type="button">
+<span class="sidebar-icon">⌖</span><span>Mode terrain</span>
+</button>
+<div class="sidebar-group sidebar-settings-group">
+<button aria-expanded="false" class="sidebar-module" id="sidebarSettingsBtn" type="button">
+<span class="sidebar-icon">⚙</span><span>Paramètres &amp; sauvegardes</span><span class="sidebar-chevron">⌄</span>
+</button>
+<div class="settings-menu" id="settingsMenu">
+<div class="settings-dropdown" id="settingsDropdown">
+<button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
+<button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
+<button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
+<button id="trashBtn" type="button">Corbeille <span class="settings-count" id="trashCount">0</span></button>
+<button id="connectDriveBtn" type="button">Connecter Google Drive</button>
+<button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
+<button id="sendVerificationBtn" type="button">Renvoyer l’email de vérification</button>
+<button id="openHelpBtn" type="button">Présentation &amp; FAQ</button>
+<div class="settings-separator"></div>
+<button class="danger-link" id="logoutBtn" type="button">Déconnecter</button>
+</div>
+</div>
+</div>
+</nav>
+</aside>
+<button aria-label="Fermer le menu" class="sidebar-backdrop" id="sidebarBackdrop" type="button"></button>
+<div class="portal-main">
+<div class="portal-topbar">
+<button aria-controls="portalSidebar" aria-expanded="false" aria-label="Ouvrir le menu" class="sidebar-toggle" id="sidebarToggleBtn" type="button">☰</button>
+<div class="topbar-context">
+<strong id="topbarModuleTitle">Tableau de bord</strong>
+<span id="topbarPageTitle">Vue d’ensemble</span>
+</div>
+<input accept="application/zip,.zip" class="hidden" id="fullRestoreInput" type="file"/>
+<div class="user-actions">
+<button aria-label="État de la synchronisation" class="sync-status-pill sync-unknown" id="syncStatusPill" title="État de la synchronisation" type="button">
+<span aria-hidden="true" class="sync-status-dot"></span>
+<span id="syncStatusText">À vérifier</span>
+</button>
+<button aria-label="Sauvegarder" class="ghost icon-btn" id="globalSaveBtn" title="Sauvegarder" type="button">💾</button>
+<div class="user-pill" id="currentUser"></div>
+</div>
+</div>
+<div class="workspace">
+<div class="tab-panel active" id="panel-dashboard">
+<iframe data-src="tableau-de-bord.html?embedded=1" id="dashboardFrame" scrolling="yes" src="about:blank" title="Tableau de bord"></iframe>
+</div>
+<div class="tab-panel" id="panel-devis">
+<iframe data-src="gestion-commerciale.html?embedded=1" id="devisFrame" scrolling="yes" src="about:blank" title="Gestion commerciale"></iframe>
+</div>
+<div class="tab-panel" id="panel-fournisseurs">
+<iframe data-src="fournisseurs.html?embedded=1" id="supplierFrame" scrolling="yes" src="about:blank" title="Fournisseurs"></iframe>
+</div>
+<div class="tab-panel" id="panel-terrain">
+<iframe data-src="terrain.html?embedded=1" id="terrainFrame" scrolling="yes" src="about:blank" title="Mode terrain"></iframe>
+</div>
+<div class="tab-panel" id="panel-compta">
+<iframe data-src="comptabilite.html?embedded=1" id="comptaFrame" scrolling="yes" src="about:blank" title="Comptabilité"></iframe>
+</div>
+<div class="tab-panel" id="panel-chantier">
+<iframe data-src="suivi-client.html?embedded=1" id="chantierFrame" scrolling="yes" src="about:blank" title="Suivi client"></iframe>
+</div>
+<div class="tab-panel" id="panel-personnel">
+<iframe data-src="personnel.html?embedded=1" id="personnelFrame" scrolling="yes" src="about:blank" title="Personnel"></iframe>
+</div>
+<div class="tab-panel" id="panel-impots">
+<iframe data-src="impots.html?embedded=1" id="impotsFrame" scrolling="yes" src="about:blank" title="Impôts IPP"></iframe>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+
+<div aria-hidden="true" class="help-frame-modal" id="helpFrameModal">
+  <div class="help-frame-dialog" role="dialog" aria-modal="true" aria-labelledby="helpFrameTitle">
+    <div class="help-frame-head">
+      <div><strong id="helpFrameTitle">Présentation &amp; FAQ</strong><span>Centre d’aide BastCompta</span></div>
+      <div class="help-frame-actions">
+        <a href="faq.html" target="_blank" title="Ouvrir dans un nouvel onglet">↗</a>
+        <button id="closeHelpFrameBtn" type="button" aria-label="Fermer le centre d’aide">×</button>
+      </div>
+    </div>
+    <iframe id="helpFrame" title="Centre d’aide BastCompta" src="about:blank" data-src="faq.html?embedded=1"></iframe>
+  </div>
+</div>
+<div aria-hidden="true" class="drive-modal" id="hiddenDriveModal">
+<div class="drive-modal-card">
+<div class="drive-modal-head">
+<div>
+<h3>Fichiers Drive cachés</h3>
+<p>Contenu du dossier Google Drive appDataFolder utilisé par BastCompta. Ces fichiers ne sont pas visibles
+            dans l’interface Drive classique.</p>
+</div>
+<div class="user-actions">
+<button class="hidden-drive-head-action" id="refreshHiddenDriveBtn" type="button" aria-label="Actualiser" title="Actualiser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v6h-6"/><path d="M4 18v-6h6"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></svg></button>
+<button class="hidden-drive-head-action" id="closeHiddenDriveBtn" type="button" aria-label="Fermer" title="Fermer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+</div>
+<div class="drive-modal-body">
+<div class="hidden-drive-overview" id="hiddenDriveOverview" aria-live="polite"></div>
+<div class="hidden-drive-toolbar">
+<label class="hidden-drive-search"><span>Rechercher</span><input id="hiddenDriveSearch" type="search" placeholder="Nom, catégorie ou type de fichier…" autocomplete="off"/></label>
+<label class="hidden-drive-sort"><span>Trier par</span><select id="hiddenDriveSort"><option value="modified-desc">Plus récents</option><option value="modified-asc">Plus anciens</option><option value="name-asc">Nom A → Z</option><option value="category">Catégorie</option><option value="size-desc">Taille décroissante</option></select></label>
+</div>
+<div aria-label="Filtrer les fichiers Drive cachés" class="hidden-drive-tabs" id="hiddenDriveTabs">
+<button class="hidden-drive-tab active" data-drive-category="all" type="button">Tous</button>
+<button class="hidden-drive-tab" data-drive-category="devis" type="button">Devis</button>
+<button class="hidden-drive-tab" data-drive-category="factures" type="button">Factures</button>
+<button class="hidden-drive-tab" data-drive-category="rappels" type="button">Rappels</button>
+<button class="hidden-drive-tab" data-drive-category="comptabilite" type="button">Comptabilité</button>
+<button class="hidden-drive-tab" data-drive-category="clients" type="button">Clients / chantiers</button>
+<button class="hidden-drive-tab" data-drive-category="personnel" type="button">Personnel</button>
+<button class="hidden-drive-tab" data-drive-category="impots" type="button">Impôts</button>
+<button class="hidden-drive-tab" data-drive-category="fournisseurs" type="button">Fournisseurs</button>
+<button class="hidden-drive-tab" data-drive-category="tarifs" type="button">Tarifs</button>
+<button class="hidden-drive-tab" data-drive-category="terrain" type="button">Terrain</button>
+<button class="hidden-drive-tab" data-drive-category="documents" type="button">Pièces jointes</button>
+<button class="hidden-drive-tab" data-drive-category="sauvegardes" type="button">Sauvegardes</button>
+<button class="hidden-drive-tab" data-drive-category="autres" type="button">Autres</button>
+</div>
+<div class="hint" id="hiddenDriveStatus">Clique sur Actualiser pour charger la liste.</div>
+<div class="hidden-drive-list" id="hiddenDriveList"></div>
+</div>
+</div>
+</div>
+<div aria-hidden="true" class="subscription-modal" id="subscriptionModal">
+<div class="subscription-modal-card">
+<div id="subscriptionModalText"></div>
+<div class="subscription-extra">
+        Activation dans les 24h.<br/><br/>
+        Pour une activation plus rapide, envoyez une preuve de paiement à :
+        <strong>bastcompta@outlook.be</strong>
+</div>
+<div class="subscription-payment">
+<p><strong>Compte bancaire :</strong> BE62 0013 1811 9761</p>
+<p><strong>Communication :</strong> <span id="subscriptionCommunication">bastcompta</span></p>
+</div>
+<button class="primary" id="closeSubscriptionModalBtn" type="button">J’ai compris</button>
+</div>
+</div>
+<div aria-busy="true" aria-live="polite" class="backup-overlay" id="backupOverlay">
+<div class="backup-overlay-card">
+<div class="backup-spinner"></div>
+<h3 id="backupOverlayTitle">Sauvegarde en cours</h3>
+<p id="backupOverlayText">Veuillez patienter…</p>
+</div>
+</div>
+<script src="js/index.js?v=48" type="module"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+      document.querySelectorAll(".landing-register-link").forEach(function (link) {
+        link.addEventListener("click", function () {
+          window.setTimeout(function () {
+            const registerTab = document.querySelector('[data-auth-tab="register"]');
+            const authCard = document.querySelector(".auth-card");
+            if (registerTab) registerTab.click();
+            if (authCard) authCard.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 50);
+        });
+      });
+
+      const revealItems = document.querySelectorAll(".landing-reveal");
+      if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.12 });
+        revealItems.forEach(function (item) { observer.observe(item); });
+      } else {
+        revealItems.forEach(function (item) { item.classList.add("is-visible"); });
+      }
+    });
+  </script>
+</body>
+</html>

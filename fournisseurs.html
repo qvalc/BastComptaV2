@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <script src="js/core/storage-keys.js"></script>
+  <script src="js/core/utils.js"></script>
+  <script src="js/core/formatters.js"></script>
+  <script src="js/core/file-utils.js"></script>
+  <script src="js/core/drive-client.js"></script>
+  <script src="js/modules/suppliers/supplier-model.js"></script>
+  <script src="js/core/access-control.js"></script>
+  <script>window.BastComptaAccess.requirePortalAccess();</script>
+  <script src="js/storage.js"></script>
+  <script src="js/trash.js?v=1"></script>
+  <script src="js/ui-feedback.js?v=1"></script>
+  <script src="js/keyboard-navigation.js?v=1"></script>
+  <script src="js/date-inputs.js?v=1"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fournisseurs</title>
+  <link rel="stylesheet" href="css/base.css?v=4">
+  <link rel="stylesheet" href="css/fournisseurs.css?v=1">
+  <link rel="stylesheet" href="css/action-icons.css?v=3">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>Fournisseurs</h1>
+        <p>Fiches fournisseurs et articles de référence</p>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="primary" onclick="addSupplier()">+ Ajouter un fournisseur</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="supplier-panel">
+        <div class="panel-head">
+          <h2>Fournisseurs <span id="supplierCount">0</span></h2>
+          <input id="supplierSearch" type="search" placeholder="Rechercher..." oninput="renderSupplierList()">
+        </div>
+        <div id="supplierList" class="supplier-list"></div>
+      </aside>
+
+      <section id="workspace" class="workspace"></section>
+    </main>
+  </div>
+  <input id="articleExcelInput" type="file" accept=".xlsx,.xls" hidden onchange="importArticlesExcel(this.files && this.files[0]); this.value=''">
+  <div id="toast" class="toast"></div>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="js/fournisseurs.js"></script>
+  <script src="js/action-icons.js?v=3"></script>
+</body>
+</html>

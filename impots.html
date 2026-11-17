@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <script src="js/core/storage-keys.js"></script>
+  <script src="js/core/utils.js"></script>
+  <script src="js/modules/taxes/calculations.js"></script>
+  <script src="js/core/access-control.js"></script>
+  <script>window.BastComptaAccess.requirePortalAccess();</script>
+  <script src="js/storage.js"></script>
+  <script src="js/trash.js?v=1"></script>
+  <script src="js/ui-feedback.js?v=1"></script>
+  <script src="js/keyboard-navigation.js?v=1"></script>
+  <script src="js/date-inputs.js?v=1"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Impôts IPP</title>
+  <link rel="stylesheet" href="css/base.css?v=4">
+  <link rel="stylesheet" href="css/impots.css?v=2">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <link rel="stylesheet" href="css/action-icons.css?v=3">
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title-wrap">
+        <h1>Impôts IPP</h1>
+        <p>Préparation belge pour indépendant personne physique : chiffres, codes probables et contrôles à vérifier.</p>
+      </div>
+      <div class="actions">
+        <button onclick="refreshAll()">Actualiser les chiffres</button>
+        <button onclick="printReport()">Imprimer / PDF</button>
+        <button class="primary" onclick="saveSettings(true)">Sauvegarder</button>
+      </div>
+    </div>
+
+    <div class="notice">
+      <strong>Important :</strong> ce module prépare une aide à l'encodage IPP. Il ne remplace pas Tax-on-web, la brochure officielle ou ton comptable. Les codes sont proposés selon une activité en personne physique et doivent être vérifiés chaque année.
+    </div>
+
+    <div class="summary-grid" id="summaryGrid"></div>
+    <div class="tabs" id="tabs"></div>
+    <div id="pages"></div>
+  </div>
+
+  <script src="js/impots.js?v=20261021-km"></script>
+  <script src="js/action-icons.js?v=3"></script>
+</body>
+
+</html>
