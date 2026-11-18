@@ -54,3 +54,27 @@ test('the new loan editor opens without selecting a nonexistent loan and keeps u
   assert.match(html,/name="professionalPercent"[^>]*value=""/);
   assert.match(html,/name="outstandingCapital"[^>]*value=""/);
 });
+test('opening on a new date advances the projection but never marks scheduled instalments paid',()=>{
+  const loan={...base,endDate:'2026-12-02',scheduleConfirmedThrough:'2026-12-31',payments:[
+    {date:'2026-11-02',total:300,capital:250,interest:40,insurance:10,planned:true},
+    {date:'2026-12-02',total:300,capital:260,interest:30,insurance:10,planned:true}
+  ]};
+  const before=JSON.stringify(loan);
+  const october=loans.timeline(loan,'2026-10-31');assert.equal(october.awaitingConfirmation,0);assert.equal(october.nextDue,'2026-11-02');assert.equal(october.projection.professionalCapital,10000);
+  const november=loans.timeline(loan,'2026-11-18');assert.equal(november.awaitingConfirmation,1);assert.equal(november.projection.professionalCapital,9875);
+  assert.equal(loans.position(loan,'2026-11-18').complete,false);
+  const december=loans.timeline(loan,'2026-12-03');assert.equal(december.awaitingConfirmation,2);assert.equal(december.projection.professionalCapital,9745);assert.equal(december.termReached,true);
+  assert.equal(JSON.stringify(loan),before);
+});
+test('a missing breakdown or expired schedule cannot produce an automatic estimate',()=>{
+  const loan={...base,endDate:'2032-10-02',scheduleConfirmedThrough:'2032-10-02',payments:base.payments.map(p=>({...p,planned:true}))};
+  assert.equal(loans.timeline(loan,'2026-11-18').projection.complete,false);
+  assert.equal(loans.timeline({...loan,scheduleConfirmedThrough:'2026-10-31'},'2026-11-18').projection.complete,false);
+  assert.equal(loans.position({...base,endDate:'2026-11-01'},'2026-11-18').complete,false);
+});
+test('automatic date uses Belgium time while manual and closed-year dates remain fixed',()=>{
+  assert.equal(loans.today(new Date('2026-11-18T23:30:00Z')),'2026-11-19');
+  assert.equal(loans.balanceDate(2026,'','2026-11-19'),'2026-11-19');
+  assert.equal(loans.balanceDate(2026,'2026-11-18','2026-11-19'),'2026-11-18');
+  assert.equal(loans.balanceDate(2025,'','2026-11-19'),'2025-12-31');
+});

@@ -2527,21 +2527,23 @@ function renderResult() {
 
 
 function startLoanEditor(index = -1) {
-  loanEditor = {index, value: index < 0 ? {id:crypto.randomUUID(),label:'',startDate:'',initialCapital:'',professionalPercent:'',outstandingDate:'',outstandingCapital:'',scheduleConfirmedThrough:'',payments:[]} : structuredClone(data.loans[index])};
+  loanEditor = {index, value: index < 0 ? {id:crypto.randomUUID(),label:'',startDate:'',initialCapital:'',professionalPercent:'',endDate:'',outstandingDate:'',outstandingCapital:'',scheduleConfirmedThrough:'',payments:[]} : structuredClone(data.loans[index])};
   render();
 }
 function readLoanEditor() {
   const form=document.getElementById('loanEditorForm');
   if(!form || !loanEditor)return;
   const values=new FormData(form),next=loanEditor.value;
-  for(const key of ['label','startDate','initialCapital','professionalPercent','outstandingDate','outstandingCapital','scheduleConfirmedThrough'])next[key]=String(values.get(key) ?? '');
-  next.payments=(next.payments||[]).map((payment,index)=>Object.fromEntries(['date','total','capital','interest','insurance'].map(key=>[key,String(values.get('p'+index+'-'+key) ?? '')])));
+  for(const key of ['label','startDate','endDate','initialCapital','professionalPercent','outstandingDate','outstandingCapital','scheduleConfirmedThrough'])next[key]=String(values.get(key) ?? '');
+  next.payments=(next.payments||[]).map((payment,index)=>({...payment,...Object.fromEntries(['date','total','capital','interest','insurance'].map(key=>[key,String(values.get('p'+index+'-'+key) ?? '')])),planned:values.get('p'+index+'-planned')==='on'}));
 }
-function addLoanPayment() {readLoanEditor();loanEditor.value.payments.push({date:'',total:'',capital:'',interest:'',insurance:''});render();}
+function addLoanPayment(planned=false) {readLoanEditor();loanEditor.value.payments.push({date:'',total:'',capital:'',interest:'',insurance:'',planned});render();}
 async function saveLoanEditor(event) {
   event.preventDefault();readLoanEditor();
   const loan=structuredClone(loanEditor.value);
   if(!loan.label.trim() || !loan.startDate || BastLoans.amount(loan.initialCapital)===null || BastLoans.amount(loan.professionalPercent)===null || Number(loan.professionalPercent)>100){alert('Renseignez le libellé, la date, le capital initial et la part professionnelle (0 à 100 %).');return;}
+  if(loan.endDate && loan.endDate<loan.startDate){alert('La fin du prêt doit être postérieure au début.');return;}
+  if((loan.payments||[]).some(p=>!p.planned&&p.date>BastLoans.today())){alert('Une mensualité future doit être marquée comme prévue, pas comme payée.');return;}
   if(loanEditor.index<0)data.loans.push(loan);else data.loans[loanEditor.index]=loan;
   loanEditor=null;notifyPortalBusinessChange('Emprunt modifié');
   localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
@@ -2556,21 +2558,21 @@ function renderLoanEditor() {
   const v=loanEditor.value;
   const field=(label,key,type='number')=>`<label>${label}<input aria-label="${label}" name="${key}" type="${type}" ${type==='number'?'min="0" step="0.01"':''} value="${escapeAttr(v[key] ?? '')}"></label>`;
   return `<form id="loanEditorForm" class="card" oninput="readLoanEditor()" onsubmit="saveLoanEditor(event)"><h3>${loanEditor.index<0?'Nouvel emprunt':'Modifier l’emprunt'}</h3>
-    <div class="loan-fields">${field('Libellé de l’emprunt','label','text')}${field('Date de début du prêt','startDate','date')}${field('Capital initial total emprunté','initialCapital')}${field('Part professionnelle (%)','professionalPercent')}</div>
+    <div class="loan-fields">${field('Libellé de l’emprunt','label','text')}${field('Date de début du prêt','startDate','date')}${field('Date de fin prévue du prêt','endDate','date')}${field('Capital initial total emprunté','initialCapital')}${field('Part professionnelle (%)','professionalPercent')}</div>
     <h4>Solde communiqué par la banque (facultatif)</h4><div class="loan-fields">${field('Date du capital restant dû','outstandingDate','date')}${field('Capital restant dû total','outstandingCapital')}</div>
     <p class="hint">Ce solde doit correspondre à la date du bilan. Sinon, complétez les remboursements et confirmez leur exhaustivité ci-dessous. Un champ vide signifie inconnu, pas zéro.</p>
-    <h4>Remboursements</h4><div style="overflow:auto"><table><thead><tr>${['Date','Mensualité totale','Capital remboursé','Intérêts','Assurance / frais'].map(s=>`<th>${s}</th>`).join('')}</tr></thead><tbody>${(v.payments||[]).map((p,i)=>`<tr>${['date','total','capital','interest','insurance'].map(key=>`<td><input aria-label="${({date:'Date mensualité',total:'Mensualité totale',capital:'Capital mensualité',interest:'Intérêts mensualité',insurance:'Assurance mensualité'})[key]} ${i+1}" type="${key==='date'?'date':'number'}" ${key==='date'?'':'min="0" step="0.01"'} name="p${i}-${key}" value="${escapeAttr(p[key] ?? '')}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>
-    <button type="button" onclick="addLoanPayment()">Ajouter une mensualité</button>
-    <div class="loan-fields">${field('Échéancier complet et vérifié jusqu’au','scheduleConfirmedThrough','date')}</div>
-    <p class="hint">Ne confirmez cette date qu’après vérification de toutes les mensualités avec le tableau de remboursement. La V2 ne calcule pas les intérêts manquants.</p>
+    <h4>Remboursements</h4><div style="overflow:auto"><table><thead><tr>${['Date','Mensualité totale','Capital remboursé','Intérêts','Assurance / frais','Échéance prévue (non payée)'].map(s=>`<th>${s}</th>`).join('')}</tr></thead><tbody>${(v.payments||[]).map((p,i)=>`<tr>${['date','total','capital','interest','insurance'].map(key=>`<td><input aria-label="${({date:'Date mensualité',total:'Mensualité totale',capital:'Capital mensualité',interest:'Intérêts mensualité',insurance:'Assurance mensualité'})[key]} ${i+1}" type="${key==='date'?'date':'number'}" ${key==='date'?'':'min="0" step="0.01"'} name="p${i}-${key}" value="${escapeAttr(p[key] ?? '')}"></td>`).join('')}<td><input aria-label="Échéance prévue ${i+1}" type="checkbox" name="p${i}-planned" ${p.planned?'checked':''}></td></tr>`).join('')}</tbody></table></div>
+    <button type="button" onclick="addLoanPayment()">Ajouter un paiement effectué</button> <button type="button" onclick="addLoanPayment(true)">Ajouter une échéance prévue</button>
+    <div class="loan-fields">${field('Tableau bancaire saisi et vérifié jusqu’au','scheduleConfirmedThrough','date')}</div>
+    <p class="hint">Ce champ décrit la couverture du tableau bancaire saisi, pas la fin du prêt. Saisissez aussi ses échéances futures et cochez « prévue » : elles ne seront jamais marquées payées automatiquement. Sans ventilation bancaire, aucun capital ni intérêt n’est estimé.</p>
     <button type="submit">Enregistrer l’emprunt</button> <button type="button" onclick="loanEditor=null;render()">Annuler</button></form>`;
 }
 function renderLoans() {
   const t=totals(),loans=t.loanSummary;
   return `<section class="page ${activePage==='loans'?'active':''}"><div class="card"><div class="section-head"><h2>Emprunts</h2><button type="button" onclick="startLoanEditor()">Ajouter un emprunt</button></div>
-    <label>Date du bilan<input aria-label="Date du bilan" type="date" value="${escapeAttr(loans.asOf)}" onchange="setField('settings.balanceDate',this.value)"></label>
+    <label><input aria-label="Date du bilan automatique" type="checkbox" ${!data.settings.balanceDate?'checked':''} onchange="setField('settings.balanceDate',this.checked ? '' : '${escapeAttr(loans.asOf)}')"> Date automatique à chaque ouverture (heure de Belgique)</label><label>Date du bilan<input aria-label="Date du bilan" type="date" value="${escapeAttr(loans.asOf)}" onchange="setField('settings.balanceDate',this.value)"></label>
     <p class="hint">L’actif déjà limité à la part professionnelle n’est pas réduit une seconde fois. Seule la part professionnelle du capital restant dû confirmé est ajoutée au passif. Les mensualités ne sont pas déduites automatiquement de la banque ni reprises automatiquement dans les charges : rapprochez ces mouvements avec vos écritures existantes.</p>
-    ${(data.loans||[]).map((loan,i)=>{const p=loans.positions[i];return `<div class="card"><h3>${escapeHtml(loan.label || 'Emprunt')}</h3><div class="kv"><span>Capital initial total / part professionnelle</span><strong>${loan.initialCapital===''?'À compléter':money(loan.initialCapital)} / ${escapeHtml(loan.professionalPercent ?? '')} %</strong></div><div class="kv"><span>Dette professionnelle au ${escapeHtml(loans.asOf)}</span><strong>${p.complete?money(p.professionalCapital):'À compléter'}</strong></div><p class="hint">${escapeHtml(p.reason)}</p><button type="button" onclick="startLoanEditor(${i})">Modifier l’emprunt</button></div>`;}).join('') || '<p>Aucun emprunt renseigné.</p>'}
+    ${(data.loans||[]).map((loan,i)=>{const p=loans.positions[i],timeline=BastLoans.timeline(loan,loans.asOf);return `<div class="card"><h3>${escapeHtml(loan.label || 'Emprunt')}</h3><div class="kv"><span>Capital initial total / part professionnelle</span><strong>${loan.initialCapital===''?'À compléter':money(loan.initialCapital)} / ${escapeHtml(loan.professionalPercent ?? '')} %</strong></div><div class="kv"><span>Dette professionnelle au ${escapeHtml(loans.asOf)}</span><strong>${p.complete?money(p.professionalCapital):'À compléter'}</strong></div><p class="hint">${escapeHtml(p.reason)}</p><div class="kv"><span>Fin prévue du prêt</span><strong>${escapeHtml(timeline.endDate || 'À renseigner')}</strong></div>${timeline.termReached?'<p class="hint">Terme prévu atteint : vérifiez le solde et les derniers paiements. Le prêt n’est pas clôturé automatiquement.</p>':''}<p class="hint">${timeline.awaitingConfirmation} échéance(s) arrivée(s) à terme, à confirmer.${timeline.nextDue?' Prochaine échéance prévue : '+escapeHtml(timeline.nextDue):''}</p>${timeline.projection?.complete?`<div class="kv"><span>Dette professionnelle théorique selon le tableau bancaire</span><strong>${money(timeline.projection.professionalCapital)}</strong></div><p class="hint">Projection uniquement, sans effet sur le passif confirmé, la banque ou les charges.</p>`:timeline.projection?'<p class="hint">Projection à compléter avec les montants du tableau bancaire.</p>':''}<button type="button" onclick="startLoanEditor(${i})">Modifier l’emprunt</button></div>`;}).join('') || '<p>Aucun emprunt renseigné.</p>'}
     <div class="kv"><span>Dette professionnelle confirmée</span><strong>${money(loans.confirmedProfessionalDebt)}${loans.incomplete?' + à compléter':''}</strong></div>
     </div>${renderLoanEditor()}</section>`;
 }
@@ -3110,3 +3112,6 @@ window.addEventListener('message', event => {
     render();
   }
 });
+
+// Refresh date-dependent views when returning to the application, without saving data.
+document.addEventListener('visibilitychange',()=>{if(!document.hidden && ['loans','balance'].includes(activePage))render();});

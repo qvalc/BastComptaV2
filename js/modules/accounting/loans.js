@@ -4,9 +4,10 @@
   const amount=value=>value!==null&&value!==undefined&&String(value).trim()!==''&&Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null;
   const date=value=>/^\d{4}-\d{2}-\d{2}$/.test(value||'')&&!Number.isNaN(Date.parse(value+'T00:00:00'));
   const round=value=>Math.round((value+Number.EPSILON)*100)/100;
-  function balanceDate(year,explicit='',today=new Date().toISOString().slice(0,10)){
+  const today=(now=new Date())=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Brussels',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  function balanceDate(year,explicit='',currentDate=today()){
     if(date(explicit)&&Number(explicit.slice(0,4))===Number(year))return explicit;
-    return Number(year)===Number(today.slice(0,4))?today:year+'-12-31';
+    return Number(year)===Number(currentDate.slice(0,4))?currentDate:year+'-12-31';
   }
   function position(loan,asOf){
     const initial=amount(loan.initialCapital),share=amount(loan.professionalPercent);
@@ -15,9 +16,10 @@
     if(loan.startDate>asOf)return {...result,complete:true,capital:0,professionalCapital:0,reason:'Pas encore commencé'};
     const snapshot=amount(loan.outstandingCapital);
     if(snapshot!==null&&loan.outstandingDate===asOf)return {...result,complete:true,capital:snapshot,professionalCapital:round(snapshot*share/100),reason:'Solde confirmé'};
-    if(loan.scheduleConfirmedThrough!==asOf)return {...result,reason:'Solde à cette date ou échéancier complet à confirmer'};
+    if(!date(loan.scheduleConfirmedThrough)||loan.scheduleConfirmedThrough<asOf)return {...result,reason:'Solde à cette date ou échéancier complet à confirmer'};
     const payments=(loan.payments||[]).filter(p=>date(p.date)&&p.date<=asOf);
     if((loan.payments||[]).some(p=>!date(p.date)))return result;
+    if(payments.some(p=>p.planned===true))return {...result,reason:'Échéance arrivée à terme : paiement à confirmer'};
     let repaid=0;
     for(const p of payments){
       const capital=amount(p.capital),interest=amount(p.interest),insurance=amount(p.insurance),total=amount(p.total);
@@ -32,5 +34,11 @@
     const positions=loans.map(loan=>position(loan,asOf));
     return {asOf,positions,incomplete:positions.filter(p=>!p.complete).length,confirmedProfessionalDebt:round(positions.reduce((sum,p)=>sum+(p.complete?p.professionalCapital:0),0))};
   }
-  global.BastLoans=Object.freeze({amount,balanceDate,position,summarize});
+  function timeline(loan,asOf){
+    const planned=(loan.payments||[]).filter(p=>p.planned===true&&date(p.date)).sort((a,b)=>a.date.localeCompare(b.date));
+    const projection=planned.length?position({...loan,outstandingCapital:'',outstandingDate:'',payments:(loan.payments||[]).map(p=>({...p,planned:false}))},asOf):null;
+    return {endDate:loan.endDate||'',termReached:date(loan.endDate)&&asOf>=loan.endDate,
+      awaitingConfirmation:planned.filter(p=>p.date<=asOf).length,nextDue:planned.find(p=>p.date>asOf)?.date||'',projection};
+  }
+  global.BastLoans=Object.freeze({amount,today,balanceDate,position,summarize,timeline});
 })(globalThis);
