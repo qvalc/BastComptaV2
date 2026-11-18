@@ -1442,13 +1442,13 @@ function renderHiddenDriveList() {
   const categoryLabel = getHiddenDriveCategoryLabel(hiddenDriveActiveCategory);
 
   if (!hiddenDriveFilesCache.length) {
-    hiddenDriveStatus.textContent = 'Aucun fichier caché trouvé dans appDataFolder.';
+    hiddenDriveStatus.textContent = 'Aucun fichier dans votre espace Cloudflare.';
     hiddenDriveList.innerHTML = '';
     return;
   }
 
   if (!files.length) {
-    hiddenDriveStatus.textContent = 'Aucun fichier dans l’onglet « ' + categoryLabel + ' ». Total Drive caché : ' + hiddenDriveFilesCache.length + ' fichier(s).';
+    hiddenDriveStatus.textContent = 'Aucun fichier dans l’onglet « ' + categoryLabel + ' ». Total Cloudflare : ' + hiddenDriveFilesCache.length + ' fichier(s).';
     hiddenDriveList.innerHTML = '<div class="hidden-drive-empty">Aucun fichier dans cette catégorie.</div>';
     return;
   }
@@ -1497,10 +1497,10 @@ function bindHiddenDriveFileButtons() {
         button.disabled = true;
         button.classList.add('is-loading');
         const blob = await downloadDriveFileBlob(file);
-        downloadBlob(blob, file.name || 'fichier-drive-cache');
+        downloadBlob(blob, file.name || 'fichier-cloudflare');
       } catch (error) {
         console.error(error);
-        alert('Impossible de télécharger ce fichier Drive caché.');
+        alert('Impossible de télécharger ce fichier Cloudflare.');
       } finally {
         button.disabled = false;
         button.classList.remove('is-loading');
@@ -1513,7 +1513,7 @@ function bindHiddenDriveFileButtons() {
       const file = hiddenDriveFilesCache.find(item => item.id === button.dataset.deleteDriveFile);
       if (!file) return;
       const label = file.name || 'ce fichier';
-      const confirmed = confirm('Supprimer définitivement du Drive caché : "' + label + '" ?\n\nCette action ne peut pas être annulée. Pense à télécharger une sauvegarde avant de supprimer.');
+      const confirmed = confirm('Retirer de la liste des fichiers Cloudflare : "' + label + '" ?\n\nLes versions déjà enregistrées sont conservées dans Cloudflare. Pense à télécharger une sauvegarde avant de retirer ce fichier.');
       if (!confirmed) return;
 
       try {
@@ -1524,7 +1524,7 @@ function bindHiddenDriveFileButtons() {
         await refreshHiddenDriveList();
       } catch (error) {
         console.error(error);
-        alert('Impossible de supprimer ce fichier Drive caché. Vérifie la connexion Cloudflare puis réessaie.');
+        alert('Impossible de supprimer ce fichier Cloudflare. Vérifie la connexion Cloudflare puis réessaie.');
       } finally {
         button.disabled = false;
         button.classList.remove('is-loading');
@@ -1928,7 +1928,7 @@ async function previewHiddenDriveDocumentPdf(file, button = null) {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (error) {
     console.error(error);
-    alert('Impossible de générer l’aperçu PDF depuis ce fichier Drive caché.');
+    alert('Impossible de générer l’aperçu PDF depuis ce fichier Cloudflare.');
   } finally {
     if (button) {
       button.disabled = false;
@@ -1951,7 +1951,7 @@ function closeHiddenDriveModal() {
 
 async function refreshHiddenDriveList() {
   if (!hiddenDriveStatus || !hiddenDriveList) return;
-  hiddenDriveStatus.textContent = 'Chargement des fichiers Drive cachés…';
+  hiddenDriveStatus.textContent = 'Chargement des fichiers Cloudflare…';
   hiddenDriveList.innerHTML = '';
 
   try {
@@ -1965,7 +1965,7 @@ async function refreshHiddenDriveList() {
   } catch (error) {
     console.error(error);
     hiddenDriveStatus.textContent =
-      'Impossible de charger les fichiers cachés Drive. Reconnecte Cloudflare puis réessaie. Détail : ' +
+      'Impossible de charger les fichiers Cloudflare. Reconnecte Cloudflare puis réessaie. Détail : ' +
       (error?.message || error);
   }
 }
@@ -2212,79 +2212,18 @@ async function handleFullRestoreFile(event) {
   event.target.value = '';
   if (!file) return;
 
-  const confirmed = confirm('Restaurer cette sauvegarde complète ?\n\nLes données locales actuelles seront remplacées. Si la sauvegarde contient des fichiers Drive, ils pourront être renvoyés vers le Drive caché après confirmation.');
+  const confirmed = confirm('Restaurer cette sauvegarde complète ?\n\nLes données locales actuelles seront remplacées. Les fichiers Cloudflare existants seront conservés. Les copies du ZIP pourront être ajoutées après confirmation.');
   if (!confirmed) return;
 
   showBlockingProgress('Restauration complète', 'Lecture du fichier ZIP…');
   try {
     await ensureBackupLibraries();
-    const zip = await JSZip.loadAsync(file);
-    const manifestFile = zip.file('manifest-bastcompta.json');
-    const manifest = manifestFile ? JSON.parse(await manifestFile.async('string')) : null;
-
-    const currentUser = auth.currentUser;
-
-    if (!currentUser?.uid) {
-      throw new Error('Utilisateur non connecté. Impossible de restaurer cette sauvegarde.');
-    }
-
-    if (!manifest?.owner?.uid) {
-      throw new Error(
-        'Cette sauvegarde ne contient pas d’identifiant de propriétaire. ' +
-        'Par sécurité, elle ne peut pas être restaurée automatiquement.'
-      );
-    }
-
-    if (manifest.owner.uid !== currentUser.uid) {
-      throw new Error(
-        'Cette sauvegarde appartient à un autre compte BastCompta. ' +
-        'Restauration bloquée pour éviter le partage ou la réutilisation d’un compte d’essai.'
-      );
-    }
-
-    const readJsonFromZip = async (path, fallback) => {
-      const item = zip.file(path);
-      if (!item) return fallback;
-      return JSON.parse(await item.async('string'));
-    };
-
-    const devisData = await readJsonFromZip('01-donnees-locales/devis-facture-local.json', null);
-    const comptaData = await readJsonFromZip('01-donnees-locales/comptabilite-local.json', null);
-    const suiviData = await readJsonFromZip('01-donnees-locales/suivi-client-local.json', null);
-    const personnelData = await readJsonFromZip('01-donnees-locales/personnel-local.json', null);
-    const fournisseursData = await readJsonFromZip('01-donnees-locales/fournisseurs-local.json', null);
-    const impotsData = await readJsonFromZip('01-donnees-locales/impots-ipp-local.json', null);
-    const tarifsData = await readJsonFromZip('01-donnees-locales/tarifs-local.json', null);
-
-    if (devisData) localStorage.setItem(LOCAL_DEVIS_KEY, JSON.stringify(devisData));
-    if (comptaData) localStorage.setItem(LOCAL_COMPTA_KEY, JSON.stringify(comptaData));
-    if (suiviData) localStorage.setItem(LOCAL_CHANTIERS_KEY, JSON.stringify(suiviData));
-    if (personnelData) localStorage.setItem(LOCAL_PERSONNEL_KEY, JSON.stringify(personnelData));
-    if (fournisseursData) localStorage.setItem(LOCAL_FOURNISSEURS_KEY, JSON.stringify(fournisseursData));
-    if (impotsData) localStorage.setItem(LOCAL_IMPOTS_KEY, JSON.stringify(impotsData));
-    if (tarifsData) {
-      if (Array.isArray(tarifsData.tarifs)) localStorage.setItem(LOCAL_TARIFS_KEY, JSON.stringify(tarifsData.tarifs));
-      if (Array.isArray(tarifsData.categories)) localStorage.setItem(LOCAL_TARIFS_CATEGORIES_KEY, JSON.stringify(tarifsData.categories));
-    }
-
-    const driveFiles = [];
-    if (manifest?.files) {
-      for (const entry of manifest.files) {
-        if (entry.category === 'googleDriveAppData' && entry.path && zip.file(entry.path)) driveFiles.push(entry);
-      }
-    }
-
-    if (driveFiles.length && confirm(driveFiles.length + ' fichier(s) Drive caché(s) sont présents dans la sauvegarde. Les renvoyer vers Cloudflare appDataFolder ?')) {
-      await ensureGoogleAccessToken(false);
-      for (const entry of driveFiles) {
-        const zipItem = zip.file(entry.path);
-        const blob = await zipItem.async('blob');
-        const fileName = entry.name || entry.path.split('/').pop();
-
-        await deleteDriveAppDataFilesByName(fileName);
-        await uploadBlobToDriveAppData(blob, fileName, 'application/json');
-      }
-    }
+    const zip = await JSZip.loadAsync(file, { checkCRC32: true });
+    const ownerUid = auth.currentUser?.uid;
+    const plan = await BastBackupRestore.prepare(zip, ownerUid);
+    const includeFiles = plan.files.length > 0 && confirm(plan.files.length + ' fichier(s) sont présents dans le ZIP. Créer des copies supplémentaires dans Cloudflare ? Les fichiers existants seront conservés.');
+    const repository = includeFiles ? await window.BastCloudV2.ensure() : null;
+    await BastBackupRestore.restore(plan, {repository, storage: localStorage, includeFiles, isCurrent: () => auth.currentUser?.uid === ownerUid});
 
     alert('Restauration terminée. La page va être rechargée.');
     location.reload();

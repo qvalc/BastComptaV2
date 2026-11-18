@@ -2,8 +2,9 @@
 
 <html lang="fr">
 <head>
-<script src="js/core/cloudflare-files.js?v=2-revision"></script>
-<script src="js/core/cloudflare-bootstrap.js"></script>
+<script src="js/core/cloudflare-files.js?v=3-restore-copies"></script>
+<script src="js/core/backup-restore.js"></script>
+<script src="js/core/cloudflare-bootstrap.js?v=2-ipp"></script>
 <script src="js/core/cloudflare-local-storage.js"></script>
 
 <meta charset="utf-8"/>
@@ -678,7 +679,7 @@
 <div class="settings-dropdown" id="settingsDropdown">
 <button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
 <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
-<button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
+<button id="hiddenDriveBtn" type="button">Fichiers Cloudflare</button>
 <button id="trashBtn" type="button">Corbeille <span class="settings-count" id="trashCount">0</span></button>
 <button id="connectDriveBtn" type="button">Connecter Cloudflare</button>
 <button id="disconnectDriveBtn" type="button">Déconnecter Cloudflare</button>
@@ -756,9 +757,8 @@
 <div class="drive-modal-card">
 <div class="drive-modal-head">
 <div>
-<h3>Fichiers Drive cachés</h3>
-<p>Contenu du dossier Cloudflare appDataFolder utilisé par BastCompta. Ces fichiers ne sont pas visibles
-            dans l’interface Drive classique.</p>
+<h3>Fichiers Cloudflare</h3>
+<p>Fichiers enregistrés dans votre espace Cloudflare BastCompta. Recherchez, consultez ou téléchargez vos documents.</p>
 </div>
 <div class="user-actions">
 <button class="hidden-drive-head-action" id="refreshHiddenDriveBtn" type="button" aria-label="Actualiser" title="Actualiser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v6h-6"/><path d="M4 18v-6h6"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></svg></button>
@@ -771,7 +771,7 @@
 <label class="hidden-drive-search"><span>Rechercher</span><input id="hiddenDriveSearch" type="search" placeholder="Nom, catégorie ou type de fichier…" autocomplete="off"/></label>
 <label class="hidden-drive-sort"><span>Trier par</span><select id="hiddenDriveSort"><option value="modified-desc">Plus récents</option><option value="modified-asc">Plus anciens</option><option value="name-asc">Nom A → Z</option><option value="category">Catégorie</option><option value="size-desc">Taille décroissante</option></select></label>
 </div>
-<div aria-label="Filtrer les fichiers Drive cachés" class="hidden-drive-tabs" id="hiddenDriveTabs">
+<div aria-label="Filtrer les fichiers Cloudflare" class="hidden-drive-tabs" id="hiddenDriveTabs">
 <button class="hidden-drive-tab active" data-drive-category="all" type="button">Tous</button>
 <button class="hidden-drive-tab" data-drive-category="devis" type="button">Devis</button>
 <button class="hidden-drive-tab" data-drive-category="factures" type="button">Factures</button>
@@ -814,7 +814,7 @@
 <p id="backupOverlayText">Veuillez patienter…</p>
 </div>
 </div>
-<script src="js/index.js?v=51-module-audit" type="module"></script>
+<script src="js/index.js?v=53-cloudflare-files" type="module"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
       document.querySelectorAll(".landing-register-link").forEach(function (link) {

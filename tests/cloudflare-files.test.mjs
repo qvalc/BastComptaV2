@@ -47,6 +47,17 @@ test('create/update/delete retain original R2 objects and stable document IDs; c
   assert.ok(f.calls.every(call=>!call.url.includes('googleapis.com')));
   assert.ok(f.calls.filter(call=>call.options.method==='PUT').every(call=>call.url.endsWith('/bastcompta-v2-files')));
 });
+test('restoration appends one verified batch and never replaces an existing file',async()=>{
+  const f=await fixture(),repo=await f.repository().connect(),before=structuredClone(repo.files);
+  const copies=[{id:crypto.randomUUID(),name:before[0].name,mimeType:'application/pdf',content:new Blob(['%PDF-fictive'])}];
+  await repo.appendCopies(copies);
+  assert.equal(repo.files.length,83);assert.deepEqual(repo.files.slice(0,82),before);
+  assert.equal(f.calls.filter(call=>call.options.method==='PUT').length,1);
+  await assert.rejects(repo.appendCopies(copies),/invalide/);
+  const bad=await f.repository().connect();bad.fetcher=async()=>{throw Error('Network failed');};
+  await assert.rejects(bad.appendCopies([{...copies[0],id:crypto.randomUUID()}]),/Network failed/);
+  assert.equal(f.index.files.length,83);
+});
 test('concurrent sessions fail safely instead of overwriting the other catalogue',async()=>{
   const f=await fixture(),a=await f.repository().connect(),b=await f.repository().connect();
   await a.write({metadata:{name:'first.json'},content:'first'});

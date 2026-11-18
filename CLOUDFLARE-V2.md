@@ -32,6 +32,16 @@ Une validation des vrais écrans après connexion Firebase reste nécessaire ava
 
 Les paramètres IPP et autres données présents uniquement dans le stockage local de la V1 ou le ZIP ne figurent pas dans les 82 fichiers Drive. Ils doivent être repris via une copie de la sauvegarde, avec le mécanisme de restauration existant, avant de valider les résultats fiscaux de V2. Aucun réglage absent n’a été inventé.
 
+### Essai de restauration isolé du 18 novembre 2026
+
+Le ZIP réel a été contrôlé avec JSZip 3.10.1 et ses CRC. Ses 20 réglages IPP (revenus 2025, exercice 2026) sont repris exactement dans une copie privée séparée ; le module IPP réel charge ces valeurs et rend son résumé. Aucun réglage n’a été appliqué à la V2 actuelle.
+
+Le test utilise le gestionnaire de restauration V2 et le Repository réels dans une VM Node, avec un transport D1/R2 exclusivement en mémoire et sans accès réseau. Ce n’est pas un essai de restauration sur les services Cloudflare réels. Les 81 fichiers présents dans le ZIP sont restaurés, les contenus JSON sont comparés à la source après transposition des identifiants et les autres contenus sont comparés octet par octet. Les 33 références de pièces jointes contrôlées sont résolues. La sauvegarde de départ reste inchangée. Les 82 fichiers actuels Cloudflare ne sont pas remplacés par cette archive plus ancienne.
+
+Le restaurateur précédent recréait les fichiers sans actualiser leurs références. Le correctif local prépare tous les contenus avant écriture, ajoute des copies sous de nouveaux identifiants, transpose les références dans les données locales et distantes, puis confirme le catalogue en une seule mise à jour conditionnelle après relecture de chaque objet. Il ne supprime plus de fichiers par leur nom lors de la restauration. Les contrôles incluent le propriétaire, l’annulation, le changement de session et l’échec d’envoi ; les valeurs locales sont rétablies en cas d’échec d’écriture locale. Des objets R2 non référencés peuvent subsister si l’envoi échoue avant la confirmation du catalogue.
+
+Le correctif de restauration peut être publié indépendamment des essais : la publication du code ne lance aucune restauration. Les essais décrits ci-dessus sont restés isolés. Le comportement de création des ZIP (notamment noms en double et fichiers ignorés) n’a pas changé.
+
 Le Worker staging reste limité au compte déjà autorisé. L’inscription d’autres comptes ne leur donne pas automatiquement accès à Cloudflare. La publication de test conserve cette restriction ; elle ne constitue pas une ouverture du service aux autres inscrits.
 
 ## Préparation d’une préproduction en ligne séparée
@@ -43,3 +53,6 @@ Le Worker staging reste limité au compte déjà autorisé. L’inscription d’
 Le `CNAME` qui désignait le domaine V1 a été retiré de la V2. Aucun changement DNS n’est nécessaire pour publier sur l’adresse workers.dev indépendante. Le déploiement se lance avec `npm run deploy:preview` après authentification officielle Wrangler. Une préparation ou un test local ne constitue pas une publication réussie : l’URL distante doit être vérifiée après déploiement.
 
 L’adresse publique demandée reste `https://qvalc.github.io/BastComptaV2/`. Depuis cette adresse précise, le client utilise le relais séparé `https://bastcompta-v2-preview.seb-n.workers.dev/__cloudflare`. Le relais autorise le CORS de l’origine GitHub et expose les ETag nécessaires aux sauvegardes ; il exige toujours le jeton Firebase et le service API existant vérifie toujours l’UID. La politique CORS ne distingue pas les chemins des dépôts GitHub sur une même origine : l’autorisation réelle repose sur Firebase, jamais sur le CORS. La V1 et le Worker de données existant ne sont pas reconfigurés.
+
+
+Le menu « Fichiers Cloudflare » utilise le catalogue privé de la V2 pour les catégories, la recherche, les aperçus et les téléchargements. Les réglages IPP récupérés séparément sont conservés dans `bastcompta-impots-ipp-settings.json` ; la connexion peut les reprendre si la clé fiscale locale est absente, sans remplacer une saisie locale existante.

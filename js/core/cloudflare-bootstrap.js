@@ -94,7 +94,7 @@
     state.user=user.uid;rawSession.setItem('bastcompta-v2-active-user',user.uid);
     const repo = await ensure();
     await global.BastV2Storage?.restoreMissingLocalStorageFromIndexedDB();
-    const sources = {'bastcompta-crm-sync.json':'devis-facture-style-vrai-document','bastcompta-chantiers-sync.json':'bastcompta-chantiers-v1','bastcompta-personnel-sync.json':'bastcompta-personnel-v1','bastcompta-fournisseurs-sync.json':'bastcompta-fournisseurs-v1','bastcompta-terrain-drafts.json':'bastcompta-terrain-drafts-v1'};
+    const sources = {'bastcompta-impots-ipp-settings.json':'bastcompta-impots-belgique-v1','bastcompta-crm-sync.json':'devis-facture-style-vrai-document','bastcompta-chantiers-sync.json':'bastcompta-chantiers-v1','bastcompta-personnel-sync.json':'bastcompta-personnel-v1','bastcompta-fournisseurs-sync.json':'bastcompta-fournisseurs-v1','bastcompta-terrain-drafts.json':'bastcompta-terrain-drafts-v1'};
     const annual = repo.files.filter(file=>!file.trashed && /^comptabilite-.*-\d{4}\.json$/i.test(file.name)).sort((a,b)=>b.name.localeCompare(a.name));
     if(annual[0]) sources[annual[0].name]='comptabilite-local-v1';
     for(const [name,key] of Object.entries(sources)) {

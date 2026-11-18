@@ -139,6 +139,33 @@
         await this.commit(next,epoch); return structuredClone(file);
       });
     }
+    appendCopies(entries) {
+      const epoch=this.epoch;
+      return this.enqueue(async()=>{
+        if(!this.connected || epoch!==this.epoch)throw new Error('Cloudflare non connecté.');
+        const ids=new Set(this.files.map(file=>file.id));
+        for(const entry of entries){
+          if(!uuid.test(entry.id) || ids.has(entry.id) || !entry.name || !(entry.content instanceof Blob) || entry.content.size>10485760)throw new Error('Copie de restauration invalide.');
+          ids.add(entry.id);
+        }
+        const restored=[];
+        for(const entry of entries){
+          const blob=entry.content,sha256=await digest(await blob.arrayBuffer());
+          const response=await this.request('/v1/files',{method:'POST',headers:{'Content-Type':entry.mimeType},body:blob});
+          if(!response.ok)throw new Error('Copie de restauration refusée.');
+          const uploaded=await response.json();
+          if(!uuid.test(uploaded.id)||uploaded.size!==blob.size||uploaded.sha256!==sha256)throw new Error('Intégrité de restauration incorrecte.');
+          const checked=await this.request('/v1/files/'+uploaded.id),bytes=await checked.arrayBuffer();
+          if(!checked.ok||bytes.byteLength!==blob.size||await digest(bytes)!==sha256)throw new Error('Relecture de restauration incorrecte.');
+          const now=new Date().toISOString();
+          restored.push({id:entry.id,name:entry.name,mimeType:entry.mimeType,r2Id:uploaded.id,size:blob.size,sha256,trashed:false,createdTime:now,modifiedTime:now});
+        }
+        // Publish the batch only after every immutable object has been checked.
+        // A failure leaves the old catalogue intact; uploaded objects are retained.
+        await this.commit(this.files.concat(restored),epoch);
+        return structuredClone(restored);
+      });
+    }
     remove(id) {
       // Keep the R2 bytes and a tombstone; never delete an imported object.
       return this.write({id,metadata:{trashed:true}});
