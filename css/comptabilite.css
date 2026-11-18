@@ -863,3 +863,5 @@ body.bast-embedded .page.active {
 .loan-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:14px 0}.loan-fields label{display:flex;flex-direction:column;gap:6px}
 
 .loan-date-settings{display:grid;gap:12px;margin:16px 0}.loan-auto-date{display:flex;align-items:center;gap:8px}.loan-auto-date input[type="checkbox"],#loanEditorForm input[type="checkbox"]{width:auto;margin:0;flex:none}
+
+.loan-auto-date{display:flex;align-items:center;gap:8px;margin:12px 0}.loan-auto-date input[type="checkbox"]{width:auto;margin:0;flex:0 0 auto}.loan-auto-date+label{display:block;margin-bottom:14px}
