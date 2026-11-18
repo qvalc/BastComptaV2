@@ -15,7 +15,7 @@ test('GitHub V2 can preflight and read ETags; Firebase authorization is still re
   const preflight=await handler(new Request(base+'/__cloudflare/v1/data/bastcompta-v2-files',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'PUT','Access-Control-Request-Headers':'authorization,content-type,if-match'}}),{});
   assert.equal(preflight.status,204);assert.equal(preflight.headers.get('access-control-allow-origin'),origin);
   const read=await handler(new Request(base+'/__cloudflare/v1/me',{headers:{Origin:origin,Authorization:'Bearer fictive.token','Sec-Fetch-Site':'cross-site'}}),{});
-  assert.equal(read.status,200);assert.match(read.headers.get('access-control-expose-headers'),/ETag/);
+  assert.equal(read.status,200);assert.match(read.headers.get('access-control-expose-headers'),/X-BastCompta-Revision/);
   assert.equal(read.headers.get('access-control-allow-credentials'),null);
   assert.equal((await handler(new Request(base+'/__cloudflare/v1/me',{headers:{Origin:origin}}),{})).status,403);
   assert.equal((await handler(new Request(base+'/__cloudflare/v1/data/migration-copy-20261117',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'PUT'}}),{})).status,403);
@@ -35,6 +35,7 @@ test('preview relays only V2 routes and forwards neither cookies nor browser ori
   const headers={Authorization:'Bearer fictive.token',Origin:base,'If-Match':'"8"','Content-Type':'application/json',Cookie:'never-forward'};
   const response=await handler(new Request(base+'/__cloudflare/v1/data/bastcompta-v2-files',{method:'PUT',headers,body:'{}'}),{});
   assert.equal(response.status,200);assert.equal(response.headers.get('etag'),'"9"');
+  assert.equal(response.headers.get('x-bastcompta-revision'),'"9"');
   assert.equal(calls[0].url,'https://bastcompta-api-staging.seb-n.workers.dev/v1/data/bastcompta-v2-files');
   assert.equal(calls[0].options.headers.get('if-match'),'"8"');
   assert.equal(calls[0].options.redirect,'manual');

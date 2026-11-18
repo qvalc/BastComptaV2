@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import '../js/core/cloudflare-files.js';
 const {Repository,digest,queryFilter}=globalThis.BastCloudFiles;
 
-async function fixture() {
+async function fixture({revisionHeaders=revision=>({ETag:`"${revision}"`})}={}) {
   const objects=new Map(), original=new TextEncoder().encode('{"fictive":true}'), sha=await digest(original);
   const files=Array.from({length:82},(_,i)=>{
     const id=crypto.randomUUID();objects.set(id,original);
@@ -15,7 +15,7 @@ async function fixture() {
     if(url.endsWith('/v1/me'))return Response.json({uid:'fictive-owner'});
     if(url.endsWith('/migration-copy-20261117'))return Response.json({format:'bastcompta-migration-copy-v1',mode:'copy-only',phase:'verified',verifiedCount:82,totalBytes:82*original.byteLength,files});
     if(url.endsWith('/bastcompta-v2-files')){
-      if(method==='GET')return index?Response.json(index,{headers:{ETag:`"${revision}"`}}):new Response(null,{status:404});
+      if(method==='GET')return index?Response.json(index,{headers:revisionHeaders(revision)}):new Response(null,{status:404});
       if((revision&&options.headers['If-Match']!==`"${revision}"`)||(!revision&&options.headers['If-None-Match']!=='*'))return new Response(null,{status:412});
       index=JSON.parse(options.body);revision++;return Response.json({revision});
     }
@@ -53,6 +53,25 @@ test('concurrent sessions fail safely instead of overwriting the other catalogue
   await assert.rejects(b.write({metadata:{name:'second.json'},content:'second'}),error=>error.status===412);
   assert.ok(f.index.files.some(file=>file.name==='first.json'));
   assert.ok(!f.index.files.some(file=>file.name==='second.json'));
+});
+test('CDN weak ETags and the explicit revision header retain strict optimistic writes',async()=>{
+  for(const revisionHeaders of [revision=>({ETag:`W/"${revision}"`}),revision=>({'X-BastCompta-Revision':`"${revision}"`})]) {
+    const f=await fixture({revisionHeaders}),repo=await f.repository().connect();
+    await repo.write({metadata:{name:'fictive-first.json'},content:'first'});
+    assert.equal(repo.revision,'"1"');
+    await repo.write({metadata:{name:'fictive-second.json'},content:'second'});
+    assert.equal(repo.revision,'"2"');
+    const reopened=await f.repository().connect();assert.equal(reopened.revision,'"2"');
+  }
+});
+test('an absent or invalid revision never enables an unconditional overwrite',async()=>{
+  for(const revisionHeaders of [()=>({}),()=>({ETag:'W/"invalid"'})]){
+    const f=await fixture({revisionHeaders}),repo=await f.repository().connect();
+    await assert.rejects(repo.write({metadata:{name:'fictive.json'},content:'test'}),/Révision Cloudflare/);
+    const writes=f.calls.filter(call=>call.options.method==='PUT');
+    assert.equal(writes.length,1);assert.equal(writes[0].options.headers['If-None-Match'],'*');
+    await assert.rejects(repo.write({metadata:{name:'second.json'},content:'second'}),error=>error.status===412);
+  }
 });
 test('oversized content is refused before uploading; file queries preserve grouping and duplicate names',async()=>{
   const f=await fixture(),repo=await f.repository().connect(),before=f.calls.length;

@@ -4,6 +4,14 @@
   'use strict';
   const INDEX = 'bastcompta-v2-files', IMPORT = 'migration-copy-20261117';
   const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+  function readRevision(response) {
+    // A CDN can weaken ETag when it compresses the JSON. The application uses
+    // the underlying D1 revision, not the compressed representation's validator.
+    const value=response.headers.get('X-BastCompta-Revision') ?? response.headers.get('etag');
+    const match=String(value || '').trim().match(/^(?:W\/)?"([1-9][0-9]{0,14})"$/);
+    if(!match)throw new Error('Révision Cloudflare absente ou invalide : sauvegarde bloquée.');
+    return '"'+match[1]+'"';
+  }
   async function digest(bytes) {
     return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2,'0')).join('');
   }
@@ -69,8 +77,7 @@
       } else {
         const payload = await response.json();
         if (payload.format !== 'bastcompta-v2-file-index-v1') throw new Error('Format de l’index V2 inconnu.');
-        files = payload.files; revision = response.headers.get('etag');
-        if (!/^"\d+"$/.test(revision || '')) throw new Error('Révision Cloudflare absente : sauvegarde bloquée.');
+        files = payload.files; revision = readRevision(response);
       }
       validateFiles(files);
       if (epoch !== this.epoch) throw new Error('Connexion Cloudflare annulée.');
@@ -103,7 +110,7 @@
       const confirmed = await this.request('/v1/data/' + INDEX);
       const payload = await confirmed.json();
       if (JSON.stringify(payload.files) !== JSON.stringify(files)) throw new Error('Une autre session a modifié l’index après l’enregistrement. Rechargez avant de continuer.');
-      const revision = confirmed.headers.get('etag'); if (!/^"\d+"$/.test(revision || '')) throw new Error('Confirmation de révision absente.');
+      const revision = readRevision(confirmed);
       if (epoch !== this.epoch) throw new Error('Session fermée.');
       this.files = files; this.revision = revision;
     }

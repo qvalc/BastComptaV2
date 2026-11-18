@@ -20,7 +20,7 @@ function error(status,message){return secure(new Response(message,{status,header
 function cors(response,origin){
   if(origin===GITHUB_V2_ORIGIN){
     response.headers.set('Access-Control-Allow-Origin',GITHUB_V2_ORIGIN);
-    response.headers.set('Access-Control-Expose-Headers','ETag, X-Content-SHA256');
+    response.headers.set('Access-Control-Expose-Headers','ETag, X-Content-SHA256, X-BastCompta-Revision');
     response.headers.append('Vary','Origin');
   }
   return response;
@@ -62,6 +62,7 @@ export function createPreviewHandler(fetcher=fetch){
       if(upstream.status>=300&&upstream.status<400)return respond(error(502,'Redirection du service Cloudflare refusée.'));
       const resultHeaders=new Headers();
       for(const name of ['content-type','etag','x-content-sha256'])if(upstream.headers.has(name))resultHeaders.set(name,upstream.headers.get(name));
+      if(path.startsWith('/v1/data/')&&upstream.headers.has('etag'))resultHeaders.set('X-BastCompta-Revision',upstream.headers.get('etag'));
       return respond(secure(new Response(upstream.body,{status:upstream.status,headers:resultHeaders})));
     }catch(failure){
       console.error('v2-relay-error',String(failure?.name||'Error'),String(failure?.message||'').replace(/Bearer\s+[^\s"']+/g,'Bearer [redacted]').slice(0,220));
