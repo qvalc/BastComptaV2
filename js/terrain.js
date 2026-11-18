@@ -1635,8 +1635,8 @@ $('#terrainDriveGateBtn')?.addEventListener('click', async () => {
   else setDriveGate(true, 'Connexion impossible ou annulée. Cloudflare est requis pour continuer.');
 });
 
-window.addEventListener('storage', event => {
-  if ([STORAGE_KEY, DRAFTS_KEY, FAVORITES_KEY].includes(event.key)) { loadAllData(); render(); }
+window.addEventListener('storage', async event => {
+  if ([STORAGE_KEY, DRAFTS_KEY, FAVORITES_KEY].includes(event.key)) { await loadAllData(); render(); }
 });
 
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && state.currentUser) { await loadAllData(); render(); } });

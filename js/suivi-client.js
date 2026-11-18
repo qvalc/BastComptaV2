@@ -3514,7 +3514,7 @@ function toggleFileMenu(event) {
 }
 
 function closeFileMenu() {
-  document.getElementById('fileDropdown').classList.remove('open');
+  document.getElementById('fileDropdown')?.classList.remove('open');
 }
 
 function exportDataLocal() {

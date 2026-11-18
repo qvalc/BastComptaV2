@@ -1231,7 +1231,7 @@ async function sendInvoiceToAccounting() {
   const openSales = getFrameApi(comptaFrame, 'goToPage');
   if (openSales) openSales('sales');
 
-  setTimeout(() => resizeIframeToContent(comptaFrame), 100);
+  setTimeout(() => configureModuleIframe(comptaFrame), 100);
   alert(result?.message || 'Document envoyé en comptabilité.');
 }
 
@@ -2650,7 +2650,7 @@ async function openDevisDocumentFromSuiviClient(docKey = 'invoice') {
   }
 
   requestAnimationFrame(() => {
-    resizeIframeToContent(devisFrame);
+    configureModuleIframe(devisFrame);
   });
 
   return true;
