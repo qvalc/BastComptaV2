@@ -1,7 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 import {
-  getAuth,
-  setPersistence,
+  initializeAuth,
   browserLocalPersistence,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -10,6 +9,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
 import { getFirestore, doc, getDoc as readFirestoreProfile } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 import { cloudProfileAccess } from './cloudflare-profile.js';
+import { initializeV2Auth } from './core/firebase-session.js';
 const {getDoc,setDoc,updateDoc} = cloudProfileAccess(readFirestoreProfile);
 
 const firebaseConfig = {
@@ -32,11 +32,8 @@ const GOOGLE_CLIENT_ID = '724620573737-7o7bc9rn9r97r8fhqsfvlcl9dtaa7d7c.apps.goo
 const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email';
 const GOOGLE_WAS_CONNECTED_KEY = window.BastComptaStorageKeys?.googleWasConnected || 'bastcompta_google_was_connected';
 const app = initializeApp(firebaseConfig, 'bastcompta-v2');
-const auth = getAuth(app);
+const auth = initializeV2Auth(app, initializeAuth, browserLocalPersistence);
 const db = getFirestore(app);
-setPersistence(auth, browserLocalPersistence).catch(error => {
-  console.warn('Persistance de connexion indisponible', error);
-});
 
 const $ = selector => document.querySelector(selector);
 const loadingScreen = $('#terrainLoading');

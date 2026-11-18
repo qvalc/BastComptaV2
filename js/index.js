@@ -2,8 +2,7 @@
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 import {
-  getAuth,
-  setPersistence,
+  initializeAuth,
   browserLocalPersistence,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -20,6 +19,7 @@ import {
   getDoc as readFirestoreProfile
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 import { cloudProfileAccess } from './cloudflare-profile.js';
+import { initializeV2Auth, createPortalSession } from './core/firebase-session.js';
 const {getDoc,setDoc,updateDoc} = cloudProfileAccess(readFirestoreProfile);
 
 const firebaseConfig = {
@@ -3025,14 +3025,11 @@ if (fullRestoreBtn) fullRestoreBtn.addEventListener('click', () => { settingsMen
 if (fullRestoreInput) fullRestoreInput.addEventListener('change', handleFullRestoreFile);
 
 const app = initializeApp(firebaseConfig, 'bastcompta-v2');
-const auth = getAuth(app);
+const auth = initializeV2Auth(app, initializeAuth, browserLocalPersistence);
 const db = getFirestore(app);
 
-// Ne jamais bloquer l'installation des gestionnaires du formulaire de connexion.
-// La persistance Firebase et Cloudflare sont initialisés en arrière-plan.
-setPersistence(auth, browserLocalPersistence).catch(error => {
-  console.warn('Persistance Firebase indisponible.', error);
-});
+// The persistence policy is selected synchronously above, before any iframe can
+// migrate the session. Cloudflare discovery can still initialize in background.
 initGoogleDrive().catch(error => {
   console.warn('Initialisation Cloudflare indisponible.', error);
 });
@@ -3077,8 +3074,9 @@ loginForm?.addEventListener('submit', async (event) => {
   const password = document.getElementById('loginPassword').value;
 
   try {
-    await signInWithEmailAndPassword(auth, email, password);
-    setMessage('Connexion réussie.', 'success');
+    setMessage('Connexion Firebase…');
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    await portalSession.enter(credential.user);
   } catch (error) {
     setMessage(humanizeAuthError(error), 'error');
   }
@@ -3158,22 +3156,23 @@ async function showTrialInfo(user) {
   }
 }
 
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
+const portalSession = createPortalSession({
+  currentUser: () => auth.currentUser,
+  close: () => {
     disconnectGoogleDrive(false);
     showAuth();
-    return;
-  }
-
-  await user.reload().catch(() => { });
-  const freshUser = auth.currentUser || user;
-  try {
-    await window.BastCloudV2.bind(auth);
-  } catch (error) {
+  },
+  onError: error => {
     showAuth();
-    setMessage('Connexion Cloudflare impossible : ' + error.message, 'error');
-    return;
-  }
+    setMessage('Chargement de votre espace impossible : ' + error.message, 'error');
+  },
+  open: async (user, isCurrent) => {
+  setMessage('Connexion Firebase validée. Chargement de votre espace…');
+  await user.reload().catch(() => { });
+  if (!isCurrent()) return;
+  const freshUser = auth.currentUser || user;
+  await window.BastCloudV2.bind(auth);
+  if (!isCurrent()) return;
 
   if (typeof window.clarity === "function") {
     window.clarity(
@@ -3205,6 +3204,7 @@ onAuthStateChanged(auth, async (user) => {
   } catch (error) {
     console.warn('Document utilisateur Firebase indisponible, accès gratuit appliqué.', error);
   }
+  if (!isCurrent()) return;
 
   let subscription = freeFallback;
   try {
@@ -3212,11 +3212,13 @@ onAuthStateChanged(auth, async (user) => {
   } catch (error) {
     console.warn('Abonnement Firebase indisponible, accès gratuit appliqué.', error);
   }
-
+  if (!isCurrent()) return;
   currentSubscriptionState = subscription;
   showPortal(freshUser, subscription);
   setMessage('');
+  }
 });
+onAuthStateChanged(auth, user => { portalSession.enter(user); });
 
 
 
