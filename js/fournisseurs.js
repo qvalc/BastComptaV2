@@ -48,18 +48,18 @@ function addArticleToDocument(articleId,docKey){const s=supplier(),a=s?.articles
 function safePostToParent(m){try{window.parent?.postMessage(m,window.location.origin&&window.location.origin!=='null'?window.location.origin:'*')}catch{}}
 function setDriveState(ok){}
 async function driveList(){try{return await BastComptaDriveClient.listFiles(googleAccessToken,{q:`name='${DRIVE_SYNC_FILE_NAME}' and trashed=false`,fields:'nextPageToken,files(id,name,modifiedTime)',orderBy:'modifiedTime desc',pageSize:10})}catch(error){if(error?.status===401){googleAccessToken=null;setDriveState(false);safePostToParent({type:'BASTCOMPTA_REFRESH_TOKEN'});return[]}throw error}}
-async function saveSyncToDrive(showToast=true){if(!googleAccessToken){if(showToast)notify('Google Drive non connecté via le portail.');return false}try{const old=(await driveList())[0];await BastComptaDriveClient.uploadJson(googleAccessToken,{fileId:old?.id||'',name:DRIVE_SYNC_FILE_NAME,value:data,fields:'id,name'});if(showToast)notify('Fournisseurs sauvegardés sur Google Drive.');return true}catch(e){if(e?.status===401){googleAccessToken=null;setDriveState(false);safePostToParent({type:'BASTCOMPTA_REFRESH_TOKEN'})}console.error(e);if(showToast)notify('Sauvegarde Google Drive impossible.');return false}}
+async function saveSyncToDrive(showToast=true){if(!googleAccessToken){if(showToast)notify('Cloudflare non connecté via le portail.');return false}try{const old=(await driveList())[0];await BastComptaDriveClient.uploadJson(googleAccessToken,{fileId:old?.id||'',name:DRIVE_SYNC_FILE_NAME,value:data,fields:'id,name'});if(showToast)notify('Fournisseurs sauvegardés sur Cloudflare.');return true}catch(e){if(e?.status===401){googleAccessToken=null;setDriveState(false);safePostToParent({type:'BASTCOMPTA_REFRESH_TOKEN'})}console.error(e);if(showToast)notify('Sauvegarde Cloudflare impossible.');return false}}
 async function loadFromDriveIfNewer(){if(!googleAccessToken)return false;try{const file=(await driveList())[0];if(!file)return false;const remote=normalizeData(await BastComptaDriveClient.readFile(googleAccessToken,file.id));if(data.suppliers.length&&String(remote.updatedAt||'')<=String(data.updatedAt||''))return false;data=remote;localStorage.setItem(STORAGE_KEY,JSON.stringify(data));selectedSupplierId='';renderAll();return true}catch(e){console.warn(e);return false}}
 window.addEventListener('message',async e=>{if(location.origin&&location.origin!=='null'&&e.origin!==location.origin)return;const m=e.data||{};if(m.type==='BASTCOMPTA_GOOGLE_TOKEN'){googleAccessToken=m.accessToken||null;setDriveState(!!googleAccessToken);if(googleAccessToken)await loadFromDriveIfNewer()}if(m.type==='BASTCOMPTA_GOOGLE_LOGOUT'){googleAccessToken=null;setDriveState(false)}})
 window.addEventListener('storage',e=>{if(e.key===STORAGE_KEY){data=loadData();renderAll()}})
 async function saveFromPortalGlobal(){
   saveLocal('Sauvegarde globale Fournisseurs');
   if(!googleAccessToken){
-    return{ok:true,module:'fournisseurs',local:true,drive:false,warnings:['Google Drive non connecté']};
+    return{ok:true,module:'fournisseurs',local:true,drive:false,warnings:['Cloudflare non connecté']};
   }
   const drive=await saveSyncToDrive(false);
   if(!drive){
-    return{ok:false,module:'fournisseurs',local:true,drive:false,message:'Sauvegarde locale effectuée, mais la sauvegarde Google Drive des fournisseurs a échoué.'};
+    return{ok:false,module:'fournisseurs',local:true,drive:false,message:'Sauvegarde locale effectuée, mais la sauvegarde Cloudflare des fournisseurs a échoué.'};
   }
   return{ok:true,module:'fournisseurs',local:true,drive:true};
 }

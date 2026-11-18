@@ -1,0 +1,9 @@
+{
+  "name": "bastcompta-v2-preview",
+  "account_id": "307b55c07ce31e7a7ded7ee3b59f879f",
+  "main": "deployment/v2-preview-worker.mjs",
+  "compatibility_date": "2026-11-18",
+  "workers_dev": true,
+  "preview_urls": true,
+  "services": [{"binding":"DATA_API","service":"bastcompta-api-staging"}]
+}

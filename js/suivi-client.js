@@ -394,11 +394,11 @@ async function saveCrmDataToDrive(crmData, showToast = false) {
       body
     });
     if (!response.ok) throw new Error('Drive CRM status ' + response.status);
-    if (showToast) notify('CRM sauvegardé localement et sur Google Drive.');
+    if (showToast) notify('CRM sauvegardé localement et sur Cloudflare.');
     return true;
   } catch (error) {
     console.warn('Sauvegarde CRM Drive ignorée.', error);
-    if (showToast) notify('CRM sauvegardé localement. Google Drive non disponible pour le moment.');
+    if (showToast) notify('CRM sauvegardé localement. Cloudflare non disponible pour le moment.');
     return false;
   }
 }
@@ -539,7 +539,7 @@ async function deleteCrmClientFromModal() {
   await refreshCrmClientDropdown(false);
   selectedProjectId = '';
   render();
-  notify(googleAccessToken ? 'Client CRM supprimé localement et sur Google Drive.' : 'Client CRM supprimé localement. La suppression sera conservée et appliquée à Drive à la prochaine connexion.');
+  notify(googleAccessToken ? 'Client CRM supprimé localement et sur Cloudflare.' : 'Client CRM supprimé localement. La suppression sera conservée et appliquée à Drive à la prochaine connexion.');
 }
 
 async function submitCrmClientForm() {
@@ -638,8 +638,8 @@ async function saveData(showToast = true) {
 
     if (showToast) {
       notify(driveOk
-        ? 'Suivi client sauvegardé localement et sur Google Drive.'
-        : 'Suivi client sauvegardé localement.' + (googleAccessToken ? ' Google Drive non disponible pour le moment.' : ''));
+        ? 'Suivi client sauvegardé localement et sur Cloudflare.'
+        : 'Suivi client sauvegardé localement.' + (googleAccessToken ? ' Cloudflare non disponible pour le moment.' : ''));
     }
 
     render();
@@ -1041,7 +1041,7 @@ function renderPhotosTab(project) {
           <div class="hint">${clientCount} photo(s) client · ${quoteCount} photo(s) liée(s) aux devis</div>
         </div>
       </div>
-      ${!googleAccessToken ? '<div class="hint">Connecte Google Drive pour afficher les photos.</div>' : ''}
+      ${!googleAccessToken ? '<div class="hint">Connecte Cloudflare pour afficher les photos.</div>' : ''}
       <div class="crm-photo-grid">
         ${photos.length ? photos.map(photo => `
           <article class="crm-photo-card">
@@ -1084,7 +1084,7 @@ async function hydrateCrmPhotoImages() {
 }
 
 async function openCrmPhoto(fileId) {
-  if (!googleAccessToken) return notify('Connecte Google Drive pour ouvrir cette photo.');
+  if (!googleAccessToken) return notify('Connecte Cloudflare pour ouvrir cette photo.');
   const url = await fetchCrmPhotoUrl(fileId);
   if (!url) return notify('La photo ne peut pas être chargée.');
   openGenericModal(`
@@ -1162,7 +1162,7 @@ async function deleteCrmPhoto(photoId) {
     crmPhotoObjectUrls.delete(id);
     renderMain();
     notify(googleAccessToken && driveDeleted
-      ? 'Photo supprimée du PC et de Google Drive.'
+      ? 'Photo supprimée du PC et de Cloudflare.'
       : 'Photo supprimée du suivi client sur ce PC.');
   } catch (error) {
     console.error('Suppression de la photo impossible.', error);
@@ -1457,7 +1457,7 @@ function openTerrainDraft(draftId) {
 
     <section class="crm-draft-detail-section">
       <h3>Photos (${photos.length})</h3>
-      ${!googleAccessToken && photos.length ? '<div class="hint">Connecte Google Drive pour afficher les photos.</div>' : ''}
+      ${!googleAccessToken && photos.length ? '<div class="hint">Connecte Cloudflare pour afficher les photos.</div>' : ''}
       ${photos.length ? `<div class="crm-photo-grid">${photos.map(photo => `
         <article class="crm-photo-card">
           <button type="button" class="crm-photo-open" onclick="openCrmPhoto('${escapeAttr(photo.driveFileId || '')}')" aria-label="Ouvrir la photo">
@@ -2201,7 +2201,7 @@ async function downloadCrmLinkedDocumentPdf(type, itemId) {
       const key = moneyTypeToDocKey(type);
       payload = { [key]: item.rawDocument, company: readFullCrmDataFromLocalStorage().company || {} };
     }
-    if (!payload) return notify('Impossible de générer le PDF : source du document introuvable. Rechargez le document JSON ou Google Drive.');
+    if (!payload) return notify('Impossible de générer le PDF : source du document introuvable. Rechargez le document JSON ou Cloudflare.');
     notify('Génération du PDF en cours…');
     const result = await buildCommercialDocumentPdf(type, item, payload);
     result.pdf.save(result.filename);
@@ -2347,7 +2347,7 @@ function renderDocumentsTab(project) {
           <div class="section-head">
             <div>
               <h3 class="section-title">Documents client</h3>
-              <div class="hint">Ajoutez PDF, photos, preuves, plans ou documents. Avec Google Drive connecté, ils sont envoyés dans appDataFolder.</div>
+              <div class="hint">Ajoutez PDF, photos, preuves, plans ou documents. Avec Cloudflare connecté, ils sont envoyés dans appDataFolder.</div>
             </div>
             <label class="file-label">
               Ajouter fichier
@@ -2697,7 +2697,7 @@ async function getDriveCrmDocumentsForProject(project) {
     const lowerName = String(file.name || '').toLowerCase();
     const keys = lowerName.startsWith('devis-') ? ['quote'] : lowerName.startsWith('facture-') ? ['invoice'] : lowerName.startsWith('rappel-') ? ['reminder'] : [];
     for (const key of keys) {
-      const entry = buildCrmDocEntry(key, parsed[key] || {}, 'Google Drive', file);
+      const entry = buildCrmDocEntry(key, parsed[key] || {}, 'Cloudflare', file);
       if (entry && clientMatchesProject(project, entry)) docs.push(entry);
     }
   }
@@ -2905,7 +2905,7 @@ async function openCrmDocumentLinkModal() {
         <div class="modal-head">
           <div>
             <h2>Charger les documents du client</h2>
-            <div class="hint">Recherche automatique dans la Gestion commerciale${googleAccessToken ? ' et Google Drive' : ''} pour ${escapeHtml(project.clientName || project.clientRef || '')}...</div>
+            <div class="hint">Recherche automatique dans la Gestion commerciale${googleAccessToken ? ' et Cloudflare' : ''} pour ${escapeHtml(project.clientName || project.clientRef || '')}...</div>
           </div>
           <button class="small ghost" onclick="closeGenericModal()">✕</button>
         </div>
@@ -3009,7 +3009,7 @@ async function downloadCrmDocumentFromCache(type, ref) {
 async function deleteCrmDocumentFromCache(type, ref) {
   const doc = getCrmDocumentFromCache(type, ref);
   if (!doc?.fileId) return notify('Ce document n’a pas de fichier Drive à supprimer.');
-  if (!confirm(`Supprimer définitivement ${doc.fileName || doc.label + ' ' + doc.ref} de Google Drive ?`)) return;
+  if (!confirm(`Supprimer définitivement ${doc.fileName || doc.label + ' ' + doc.ref} de Cloudflare ?`)) return;
   const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${doc.fileId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${googleAccessToken}` }
@@ -3030,7 +3030,7 @@ async function deleteCrmDocumentFromCache(type, ref) {
   }
   renderCrmDocumentLinkModal();
   renderMain();
-  notify('Document supprimé de Google Drive.');
+  notify('Document supprimé de Cloudflare.');
 }
 
 function openInvoiceJsonImport() {
@@ -3097,7 +3097,7 @@ async function importInvoiceJsonToCurrentClient(event) {
     const ref = String(doc.documentNumber).trim();
     const driveFile = await saveInvoiceJsonFileToDrive(parsed, ref);
 
-    const entry = buildCrmDocEntry('invoice', doc, 'Google Drive', {
+    const entry = buildCrmDocEntry('invoice', doc, 'Cloudflare', {
       id: driveFile?.id || '',
       name: driveFile?.name || `facture-${ref}.json`,
       modifiedTime: driveFile?.modifiedTime || ''
@@ -3555,24 +3555,24 @@ async function importDataLocal(event) {
 
 async function exportJsonToDrive() {
   if (!googleAccessToken) {
-    notify('Google Drive non connecté via le portail.');
+    notify('Cloudflare non connecté via le portail.');
     return;
   }
 
   const ok = await saveSyncToDrive(true);
-  notify(ok ? 'Suivis clients sauvegardés sur Google Drive.' : 'Sauvegarde Drive impossible.');
+  notify(ok ? 'Suivis clients sauvegardés sur Cloudflare.' : 'Sauvegarde Drive impossible.');
 }
 
 async function loadFromDrive() {
   if (!googleAccessToken) {
-    notify('Google Drive non connecté via le portail.');
+    notify('Cloudflare non connecté via le portail.');
     return;
   }
 
-  if (!confirm('Charger les suivis clients depuis Google Drive remplacera les données locales. Continuer ?')) return;
+  if (!confirm('Charger les suivis clients depuis Cloudflare remplacera les données locales. Continuer ?')) return;
 
   const ok = await loadSyncDataFromDriveIfAvailable();
-  notify(ok ? 'Suivis clients chargés depuis Google Drive.' : 'Aucun fichier suivi client trouvé sur Drive.');
+  notify(ok ? 'Suivis clients chargés depuis Cloudflare.' : 'Aucun fichier suivi client trouvé sur Drive.');
   render();
 }
 
@@ -3617,7 +3617,7 @@ async function saveSyncToDrive(showErrorAlert = false) {
     return !!res && res.ok;
   } catch (error) {
     console.error(error);
-    if (showErrorAlert) alert('La sauvegarde Google Drive a échoué.');
+    if (showErrorAlert) alert('La sauvegarde Cloudflare a échoué.');
     return false;
   }
 }
@@ -3727,7 +3727,7 @@ async function handleGoogleDriveAuthError(status, showAlert = true) {
   if (status === 401) {
     resetGoogleDriveSession();
     notifyParentToRefreshGoogleToken();
-    if (showAlert) notify('Session Google Drive expirée. Reconnexion demandée au portail.');
+    if (showAlert) notify('Session Cloudflare expirée. Reconnexion demandée au portail.');
     return true;
   }
   return false;
@@ -3758,7 +3758,7 @@ function initGoogleMessages() {
       googleAccessToken = message.accessToken || null;
 
       if (googleAccessToken && window.gapi?.client) {
-        beginSuiviClientLoading('Chargement du suivi client et de Google Drive…');
+        beginSuiviClientLoading('Chargement du suivi client et de Cloudflare…');
         try {
           gapi.client.setToken({ access_token: googleAccessToken });
           await loadSyncDataFromDriveIfAvailable();
@@ -3776,7 +3776,7 @@ function initGoogleMessages() {
 
     if (message.type === 'BASTCOMPTA_GOOGLE_LOGOUT') {
       resetGoogleDriveSession();
-      notify('Google Drive déconnecté.');
+      notify('Cloudflare déconnecté.');
     }
 
     if (message.type === 'BASTCOMPTA_CHANTIERS_UPDATED') {
@@ -3814,7 +3814,7 @@ function initGapi() {
       });
 
       if (googleAccessToken) {
-        beginSuiviClientLoading('Chargement du suivi client et de Google Drive…');
+        beginSuiviClientLoading('Chargement du suivi client et de Cloudflare…');
         gapi.client.setToken({ access_token: googleAccessToken });
         await loadSyncDataFromDriveIfAvailable();
         await loadTerrainDraftsFromDrive();
@@ -3823,7 +3823,7 @@ function initGapi() {
         endSuiviClientLoading('Suivi client chargé.');
       }
     } catch (error) {
-      console.error('Initialisation Google Drive impossible.', error);
+      console.error('Initialisation Cloudflare impossible.', error);
     }
   });
 }

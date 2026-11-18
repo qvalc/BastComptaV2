@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="fr">
 <head>
+<script src="js/core/cloudflare-files.js"></script>
+<script src="js/core/cloudflare-bootstrap.js"></script>
+<script src="js/core/cloudflare-local-storage.js"></script>
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#173f35">
@@ -16,7 +20,7 @@
   <script src="js/ui-feedback.js?v=1"></script>
   <script src="js/keyboard-navigation.js?v=1"></script>
   <script src="js/date-inputs.js?v=1"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
 </head>
 <body>
   <main class="terrain-shell">
@@ -77,9 +81,9 @@
         <div class="drive-gate-card">
           <div class="drive-gate-icon">☁️</div>
           <span class="terrain-badge">Synchronisation obligatoire</span>
-          <h2 id="driveGateTitle">Connecter Google Drive</h2>
+          <h2 id="driveGateTitle">Connecter Cloudflare</h2>
           <p id="driveGateMessage">Le Mode Terrain utilise Drive pour retrouver automatiquement les visites, photos et brouillons sur tous tes appareils.</p>
-          <button id="terrainDriveGateBtn" class="primary-button" type="button">Connecter Google Drive</button>
+          <button id="terrainDriveGateBtn" class="primary-button" type="button">Connecter Cloudflare</button>
           <a href="index.html" class="text-button link-button">Retourner à BastCompta</a>
         </div>
       </div>
@@ -99,7 +103,7 @@
           <h2 id="accountTitle">Mon compte</h2>
           <p id="terrainUserEmail"></p>
           <a class="sheet-link" href="index.html">Ouvrir BastCompta complet</a>
-          <button id="connectDriveBtn" class="primary-button" type="button">Connecter Google Drive</button>
+          <button id="connectDriveBtn" class="primary-button" type="button">Connecter Cloudflare</button>
           <button id="syncDriveBtn" class="secondary-button" type="button">Synchroniser maintenant</button>
           <button id="reloadDataBtn" class="secondary-button" type="button">Recharger les données locales</button>
           <button id="terrainLogoutBtn" class="danger-button" type="button">Se déconnecter</button>

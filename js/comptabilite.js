@@ -53,7 +53,7 @@ async function handleGoogleDriveAuthError(status, showAlert = true) {
     notifyParentToRefreshGoogleToken();
 
     if (showAlert) {
-      alert('La session Google Drive a expiré. Reconnexion en cours...');
+      alert('La session Cloudflare a expiré. Reconnexion en cours...');
     }
 
     return true;
@@ -349,7 +349,7 @@ async function saveSyncToDrive(showErrorAlert = false) {
   } catch (error) {
     console.error(error);
     if (showErrorAlert) {
-      alert('La sauvegarde Google Drive automatique a échoué.');
+      alert('La sauvegarde Cloudflare automatique a échoué.');
     }
     return false;
   }
@@ -434,7 +434,7 @@ async function saveCurrentYearJsonToDrive(showErrorAlert = false) {
   } catch (error) {
     console.error(error);
     if (showErrorAlert) {
-      alert("La sauvegarde Google Drive a échoué.");
+      alert("La sauvegarde Cloudflare a échoué.");
     }
     return false;
   }
@@ -450,7 +450,7 @@ async function saveData(showAlert = true) {
     if (googleAccessToken) {
       const synced = await saveCurrentYearJsonToDrive(true);
       alert(synced
-        ? `Données sauvegardées localement et sur Google Drive${chantierSynced ? ' + chantiers mis à jour' : ''}.`
+        ? `Données sauvegardées localement et sur Cloudflare${chantierSynced ? ' + chantiers mis à jour' : ''}.`
         : `Données sauvegardées localement${chantierSynced ? ' + chantiers mis à jour' : ''}.`);
     } else {
       alert(`Données sauvegardées localement${chantierSynced ? ' + chantiers mis à jour' : ''}.`);
@@ -623,7 +623,7 @@ async function openSalesInvoicePreview(invoiceNumber) {
   }
 
   if (!getInvoiceDriveFileForNumber(normalized)) {
-    alert(`Aucune facture trouvée dans Google Drive pour le numéro ${normalized}.`);
+    alert(`Aucune facture trouvée dans Cloudflare pour le numéro ${normalized}.`);
     render();
     return;
   }
@@ -667,7 +667,7 @@ function pickPurchasePdf(rowIndex) {
   }
 
   if (!googleAccessToken) {
-    alert('Connecte Google Drive depuis le portail BastCompta.');
+    alert('Connecte Cloudflare depuis le portail BastCompta.');
     return;
   }
 
@@ -690,7 +690,7 @@ async function handlePurchasePdfUpload(event) {
   }
 
   if (!googleAccessToken) {
-    alert('Connecte Google Drive depuis le portail BastCompta.');
+    alert('Connecte Cloudflare depuis le portail BastCompta.');
     return;
   }
 
@@ -716,16 +716,16 @@ async function handlePurchasePdfUpload(event) {
     await saveCurrentYearJsonToDrive(false);
     await loadPurchasePdfDriveFiles(false);
     render();
-    alert('Facture PDF ajoutée à Google Drive.');
+    alert('Facture PDF ajoutée à Cloudflare.');
   } catch (error) {
     console.error(error);
-    alert("Échec de l'envoi de la facture PDF vers Google Drive.");
+    alert("Échec de l'envoi de la facture PDF vers Cloudflare.");
   }
 }
 
 async function openPurchasePdf(fileId) {
   if (!googleAccessToken) {
-    alert('Connecte Google Drive depuis le portail BastCompta.');
+    alert('Connecte Cloudflare depuis le portail BastCompta.');
     return;
   }
 
@@ -755,7 +755,7 @@ async function openPurchasePdf(fileId) {
       <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:Arial,sans-serif;background:#f5f7fa;color:#1f2937;">
         <div style="text-align:center;max-width:460px;">
           <h2 style="margin:0 0 12px;">Chargement de la facture…</h2>
-          <p style="margin:0;color:#6b7280;">Le PDF est récupéré depuis Google Drive.</p>
+          <p style="margin:0;color:#6b7280;">Le PDF est récupéré depuis Cloudflare.</p>
         </div>
       </div>`;
 
@@ -783,7 +783,7 @@ async function openPurchasePdf(fileId) {
         <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:Arial,sans-serif;background:#f5f7fa;color:#1f2937;">
           <div style="text-align:center;max-width:460px;">
             <h2 style="margin:0 0 12px;">Impossible d’ouvrir ce PDF</h2>
-            <p style="margin:0;color:#6b7280;">Le document n’a pas pu être téléchargé depuis Google Drive.</p>
+            <p style="margin:0;color:#6b7280;">Le document n’a pas pu être téléchargé depuis Cloudflare.</p>
           </div>
         </div>`;
     }
@@ -792,12 +792,12 @@ async function openPurchasePdf(fileId) {
 
 async function deletePurchasePdf(fileId) {
   if (!googleAccessToken) {
-    alert('Connecte Google Drive depuis le portail BastCompta.');
+    alert('Connecte Cloudflare depuis le portail BastCompta.');
     return;
   }
 
   if (!fileId) return;
-  if (!await BastUI.confirm('Supprimer définitivement cette facture PDF de Google Drive ?',{type:'danger',title:'Supprimer le PDF'})) return;
+  if (!await BastUI.confirm('Supprimer définitivement cette facture PDF de Cloudflare ?',{type:'danger',title:'Supprimer le PDF'})) return;
 
   try {
     const removed = await BastPurchasePdfDrive.remove({
@@ -867,11 +867,11 @@ function renderPurchasePdfTable(files) {
 
 function renderPurchasePdfList() {
   if (!googleAccessToken) {
-    return '<div class="muted-box">Connecte Google Drive pour afficher les factures PDF d’achat.</div>';
+    return '<div class="muted-box">Connecte Cloudflare pour afficher les factures PDF d’achat.</div>';
   }
 
   if (!purchasePdfDriveFiles.length) {
-    return '<div class="muted-box">Aucune facture PDF d’achat trouvée sur Google Drive.</div>';
+    return '<div class="muted-box">Aucune facture PDF d’achat trouvée sur Cloudflare.</div>';
   }
 
   const groups = purchasePdfDriveFiles.reduce((acc, file) => {
@@ -966,7 +966,7 @@ async function initDriveClientOnly() {
     }
   } catch (error) {
     console.error(error);
-    alert("Erreur lors de l'initialisation du client Google Drive.");
+    alert("Erreur lors de l'initialisation du client Cloudflare.");
   }
 }
 
@@ -1004,7 +1004,7 @@ function downloadJsonFile(sourceData, fileName = '') {
 
 async function uploadJsonObjectToDrive(sourceData, fileName = '') {
   if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
+    alert("Connecte Cloudflare depuis le portail BastCompta.");
     return false;
   }
 
@@ -1047,7 +1047,7 @@ async function createNextExerciseFile() {
 
     if (destination === 'drive') {
       const saved = await uploadJsonObjectToDrive(nextData, fileName);
-      alert(`Le fichier de l'exercice ${targetYear} a été envoyé sur Google Drive : ${saved.name}`);
+      alert(`Le fichier de l'exercice ${targetYear} a été envoyé sur Cloudflare : ${saved.name}`);
       return;
     }
 
@@ -1065,7 +1065,7 @@ async function createNextExerciseFile() {
 
 async function loadDriveFiles() {
   if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
+    alert("Connecte Cloudflare depuis le portail BastCompta.");
     return;
   }
 
@@ -1088,18 +1088,18 @@ async function loadDriveFiles() {
   } catch (error) {
     console.error(error);
 
-    alert("Impossible de charger la liste des sauvegardes Drive. Vérifie la connexion Google Drive dans le portail.");
+    alert("Impossible de charger la liste des sauvegardes Drive. Vérifie la connexion Cloudflare dans le portail.");
   }
 }
 
 async function importSelectedJsonFromDrive() {
   if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
+    alert("Connecte Cloudflare depuis le portail BastCompta.");
     return;
   }
 
   if (!selectedDriveFileId) {
-    alert('Sélectionne d’abord une sauvegarde Google Drive.');
+    alert('Sélectionne d’abord une sauvegarde Cloudflare.');
     return;
   }
 
@@ -1116,13 +1116,13 @@ async function importSelectedJsonFromDrive() {
     alert(`Import réussi : ${file ? file.name : 'fichier sélectionné'}`);
   } catch (error) {
     console.error(error);
-    alert("Échec de l'import depuis Google Drive.");
+    alert("Échec de l'import depuis Cloudflare.");
   }
 }
 
 async function downloadSelectedJsonFromDrive() {
   if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
+    alert("Connecte Cloudflare depuis le portail BastCompta.");
     return;
   }
 
@@ -1131,7 +1131,7 @@ async function downloadSelectedJsonFromDrive() {
   if (!fileIds.length) {
     activePage = 'gdrive';
     render();
-    alert('Choisis au moins une sauvegarde Google Drive.');
+    alert('Choisis au moins une sauvegarde Cloudflare.');
     return;
   }
 
@@ -1159,13 +1159,13 @@ async function downloadSelectedJsonFromDrive() {
       : `${fileIds.length} fichiers ont été téléchargés vers ce PC.`);
   } catch (error) {
     console.error(error);
-    alert("Échec du téléchargement depuis Google Drive.");
+    alert("Échec du téléchargement depuis Cloudflare.");
   }
 }
 
 async function deleteSelectedJsonFromDrive() {
   if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
+    alert("Connecte Cloudflare depuis le portail BastCompta.");
     return;
   }
 
@@ -1203,7 +1203,7 @@ async function deleteSelectedJsonFromDrive() {
 
 function pickLocalJsonForDrive() {
   if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
+    alert("Connecte Cloudflare depuis le portail BastCompta.");
     return;
   }
 
@@ -1216,7 +1216,7 @@ function pickLocalJsonForDrive() {
 
 async function uploadLocalJsonToDrive(event) {
   if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
+    alert("Connecte Cloudflare depuis le portail BastCompta.");
     return;
   }
 
@@ -1258,25 +1258,25 @@ async function uploadLocalJsonToDrive(event) {
     await loadDriveFiles();
 
     alert(importedCount <= 1
-      ? 'Fichier local envoyé vers Google Drive.'
-      : `${importedCount} fichiers locaux ont été envoyés vers Google Drive.`);
+      ? 'Fichier local envoyé vers Cloudflare.'
+      : `${importedCount} fichiers locaux ont été envoyés vers Cloudflare.`);
   } catch (error) {
     console.error(error);
-    alert("Échec de l'envoi du fichier local vers Google Drive.");
+    alert("Échec de l'envoi du fichier local vers Cloudflare.");
   }
 }
 
 async function exportJsonToDrive() {
   if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
+    alert("Connecte Cloudflare depuis le portail BastCompta.");
     return;
   }
 
   const saved = await saveCurrentYearJsonToDrive(false);
   if (saved) {
-    alert(`Export Google Drive réussi : ${getDriveFileName()}`);
+    alert(`Export Cloudflare réussi : ${getDriveFileName()}`);
   } else {
-    alert("Échec de l'export vers Google Drive.");
+    alert("Échec de l'export vers Cloudflare.");
   }
 }
 
@@ -1284,7 +1284,7 @@ async function importJsonFromDrive() {
   await loadDriveFiles();
 
   if (!googleDriveFiles.length) {
-    alert('Aucune sauvegarde JSON trouvée sur Google Drive.');
+    alert('Aucune sauvegarde JSON trouvée sur Cloudflare.');
     return;
   }
 
@@ -1323,7 +1323,7 @@ function renderGoogleDrive() {
           <div class="card">
             <div class="section-head">
               <div>
-                <h2>Google Drive</h2>
+                <h2>Cloudflare</h2>
               </div>
               <div class="inline-actions">
                 <button onclick="loadDriveFiles()">Actualiser la liste</button>
@@ -1331,7 +1331,7 @@ function renderGoogleDrive() {
             </div>
 
             <div class="muted-box" style="margin-bottom:16px; line-height:1.7;">
-              La connexion Google Drive se fait depuis le portail principal BastCompta.<br>
+              La connexion Cloudflare se fait depuis le portail principal BastCompta.<br>
               Les actions rapides sont aussi disponibles dans le menu <strong>Fichier</strong> en haut de l’écran.
             </div>
 
@@ -1355,7 +1355,7 @@ function renderGoogleDrive() {
             <div style="margin-top:16px;" class="card">
               <div class="section-head">
                 <div>
-                  <h3>Fichiers disponibles sur Google Drive</h3>
+                  <h3>Fichiers disponibles sur Cloudflare</h3>
                   <div class="hint">Choisis un fichier à charger dans l’application, et coche un ou plusieurs fichiers pour les rapatrier vers ce PC ou les supprimer.</div>
                 </div>
                 <div class="inline-actions">
@@ -1372,7 +1372,7 @@ function renderGoogleDrive() {
               </div>
 
               <div class="drive-file-list">
-                ${fileItems || '<div class="muted-box">Aucune sauvegarde JSON trouvée sur Google Drive.</div>'}
+                ${fileItems || '<div class="muted-box">Aucune sauvegarde JSON trouvée sur Cloudflare.</div>'}
               </div>
             </div>
           </div>
@@ -1502,7 +1502,7 @@ async function saveChantiersSyncToDrive(showErrorAlert = false) {
   } catch (error) {
     console.error(error);
     if (await handleGoogleDriveException(error, false)) return false;
-    if (showErrorAlert) alert('La synchronisation des chantiers vers Google Drive a échoué.');
+    if (showErrorAlert) alert('La synchronisation des chantiers vers Cloudflare a échoué.');
     return false;
   }
 }
@@ -2051,7 +2051,7 @@ function renderPurchases() {
         <details ${purchasePdfPanelOpen ? 'open' : ''} ontoggle="setPurchasePdfPanelOpen(this.open)">
           <summary style="display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;list-style:none;user-select:none;">
             <div>
-              <h3 style="margin:0;">Factures PDF d’achat sur Google Drive</h3>
+              <h3 style="margin:0;">Factures PDF d’achat sur Cloudflare</h3>
               <div class="hint" style="margin-top:4px;">${purchasePdfDriveFiles.length} fichier${purchasePdfDriveFiles.length > 1 ? 's' : ''} disponible${purchasePdfDriveFiles.length > 1 ? 's' : ''}, classé${purchasePdfDriveFiles.length > 1 ? 's' : ''} par année.</div>
             </div>
             <span aria-hidden="true" style="font-size:1.25rem;color:#64748b;">▾</span>

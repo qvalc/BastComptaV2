@@ -7,6 +7,7 @@ const errors = [];
 
 function walk(directory) {
   return readdirSync(directory).flatMap(name => {
+    if (['.git','.v2-preview','.wrangler','node_modules'].includes(name)) return [];
     const path = join(directory, name);
     return statSync(path).isDirectory() ? walk(path) : [path];
   });

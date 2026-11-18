@@ -6,6 +6,10 @@
 */
 (function () {
   'use strict';
+  if (window.BastV2Storage) {
+    window.BastStorage = window.BastV2Storage;
+    return;
+  }
 
   const DB_NAME = 'BastComptaDB';
   const DB_VERSION = 1;

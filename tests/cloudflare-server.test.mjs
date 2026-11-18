@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {once} from 'node:events';
+import {createV2Server} from '../scripts/serve-v2.mjs';
+test('local relay preserves revision headers, restricts writes to V2 and refuses foreign origins',async t=>{
+  const calls=[];
+  const server=createV2Server({fetcher:async(url,options)=>{calls.push({url,options});return Response.json({ok:true},{headers:{ETag:'"4"'}});}});
+  server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const base=`http://127.0.0.1:${server.address().port}`,headers={Authorization:'Bearer fictive.token','Content-Type':'application/json','If-Match':'"3"'};
+  const result=await fetch(base+'/__cloudflare/v1/data/bastcompta-v2-files',{method:'PUT',headers,body:'{}'});
+  assert.equal(result.status,200);assert.equal(result.headers.get('etag'),'"4"');assert.equal(calls[0].options.headers['if-match'],'"3"');
+  assert.equal(calls[0].url,'https://bastcompta-api-staging.seb-n.workers.dev/v1/data/bastcompta-v2-files');
+  assert.equal((await fetch(base+'/__cloudflare/v1/data/migration-copy-20261117',{method:'PUT',headers,body:'{}'})).status,403);
+  assert.equal((await fetch(base+'/__cloudflare/v1/files',{method:'DELETE',headers})).status,403);
+  assert.equal((await fetch(base+'/__cloudflare/v1/me',{headers:{...headers,Origin:'https://foreign.invalid'}})).status,403);
+  assert.equal((await fetch(base+'/__cloudflare/v1/me',{headers:{...headers,'Sec-Fetch-Site':'cross-site'}})).status,403);
+  assert.equal((await fetch(base+'/.git/config')).status,404);assert.equal(calls.length,1);
+  const shell=await fetch(base+'/');assert.equal(shell.status,200);
+  const csp=shell.headers.get('content-security-policy');assert.ok(!csp.includes('www.googleapis.com'));assert.ok(csp.includes('identitytoolkit.googleapis.com'));
+});

@@ -8,7 +8,9 @@ import {
   signOut,
   onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { getFirestore, doc, getDoc as readFirestoreProfile } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { cloudProfileAccess } from './cloudflare-profile.js';
+const {getDoc,setDoc,updateDoc} = cloudProfileAccess(readFirestoreProfile);
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDK3VeC-TOfXliPrY9IrHN0tFPf7KEm_j0',
@@ -29,7 +31,7 @@ const DRAFTS_DRIVE_FILE = 'bastcompta-terrain-drafts.json';
 const GOOGLE_CLIENT_ID = '724620573737-7o7bc9rn9r97r8fhqsfvlcl9dtaa7d7c.apps.googleusercontent.com';
 const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email';
 const GOOGLE_WAS_CONNECTED_KEY = window.BastComptaStorageKeys?.googleWasConnected || 'bastcompta_google_was_connected';
-const app = initializeApp(firebaseConfig, 'bastcompta-terrain');
+const app = initializeApp(firebaseConfig, 'bastcompta-v2');
 const auth = getAuth(app);
 const db = getFirestore(app);
 setPersistence(auth, browserLocalPersistence).catch(error => {
@@ -264,16 +266,17 @@ async function getGoogleDriveEmail(accessToken) {
   const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: 'Bearer ' + accessToken }
   });
-  if (!response.ok) throw new Error('Impossible de vérifier le compte Google Drive.');
+  if (!response.ok) throw new Error('Impossible de vérifier le compte Cloudflare.');
   const profile = await response.json();
   return normalizeEmail(profile.email);
 }
 
 async function validateDriveAccountForCurrentUser(accessToken) {
+  if (window.BastCloudV2) {await window.BastCloudV2.ensure();return auth.currentUser?.email || '';}
   const user = auth.currentUser;
   if (!user?.uid) throw new Error('Utilisateur BastCompta non connecté.');
   const driveEmail = await getGoogleDriveEmail(accessToken);
-  if (!driveEmail) throw new Error('Adresse email Google Drive introuvable.');
+  if (!driveEmail) throw new Error('Adresse email Cloudflare introuvable.');
 
   const userRef = doc(db, 'users', user.uid);
   const snap = await getDoc(userRef);
@@ -289,7 +292,7 @@ async function validateDriveAccountForCurrentUser(accessToken) {
     return driveEmail;
   }
   if (savedDriveEmail !== driveEmail) {
-    throw new Error('Ce compte BastCompta est déjà lié au Google Drive : ' + savedDriveEmail);
+    throw new Error('Ce compte BastCompta est déjà lié au Cloudflare : ' + savedDriveEmail);
   }
   return driveEmail;
 }
@@ -307,7 +310,7 @@ function initGoogleDrive() {
 
 function requestDriveToken(interactive = true) {
   return new Promise((resolve, reject) => {
-    if (!initGoogleDrive()) return reject(new Error('Google Drive pas encore prêt.'));
+    if (!initGoogleDrive()) return reject(new Error('Cloudflare pas encore prêt.'));
     const client = state.drive.client;
     client.callback = async response => {
       if (response?.error || !response?.access_token) return reject(new Error(response?.error || 'Autorisation refusée'));
@@ -330,7 +333,7 @@ function requestDriveToken(interactive = true) {
 async function driveListByName(fileName) {
   const q = new URLSearchParams({ spaces: 'appDataFolder', q: `name='${String(fileName).replace(/'/g, "\'")}' and trashed=false`, fields: 'files(id,name,modifiedTime)', pageSize: '10', orderBy: 'modifiedTime desc' });
   const res = await fetch('https://www.googleapis.com/drive/v3/files?' + q.toString(), { headers: { Authorization: 'Bearer ' + state.drive.token } });
-  if (res.status === 401) { state.drive.token = ''; throw new Error('Session Google Drive expirée'); }
+  if (res.status === 401) { state.drive.token = ''; throw new Error('Session Cloudflare expirée'); }
   if (!res.ok) throw new Error(await res.text());
   return (await res.json()).files || [];
 }
@@ -385,7 +388,7 @@ async function compressPhoto(file, maxDimension = 1920, quality = 0.82) {
 }
 
 async function uploadClientPhoto(client, file, note = '') {
-  if (!isDriveConnected()) throw new Error('Connecte Google Drive avant d’ajouter une photo.');
+  if (!isDriveConnected()) throw new Error('Connecte Cloudflare avant d’ajouter une photo.');
   const compressed = await compressPhoto(file);
   const takenAt = new Date().toISOString();
   const fileName = `${safeFilePart(clientDisplay(client))}_${takenAt.replace(/[:.]/g, '-')}.jpg`;
@@ -402,7 +405,7 @@ async function uploadClientPhoto(client, file, note = '') {
     headers: { Authorization: 'Bearer ' + state.drive.token },
     body: form
   });
-  if (response.status === 401) { state.drive.token = ''; throw new Error('Session Google Drive expirée.'); }
+  if (response.status === 401) { state.drive.token = ''; throw new Error('Session Cloudflare expirée.'); }
   if (!response.ok) throw new Error('Envoi de la photo impossible.');
   const driveFile = await response.json();
   const photo = {
@@ -471,7 +474,7 @@ function renderClientPhotos(client) {
       <button class="secondary-button" type="button" data-action="choose-client-photo">🖼️ Galerie</button>
       <input id="clientCameraInput" class="hidden" type="file" accept="image/*" capture="environment">
       <input id="clientGalleryInput" class="hidden" type="file" accept="image/*" multiple>
-    </div>` : `<div class="premium-lock"><strong>Google Drive requis</strong><span>Connecte Google Drive dans le menu du compte pour prendre et conserver les photos de ce client.</span><button class="mini-btn" type="button" data-action="connect-drive-for-photos">Connecter Drive</button></div>`}
+    </div>` : `<div class="premium-lock"><strong>Cloudflare requis</strong><span>Connecte Cloudflare dans le menu du compte pour prendre et conserver les photos de ce client.</span><button class="mini-btn" type="button" data-action="connect-drive-for-photos">Connecter Drive</button></div>`}
     <div id="clientPhotoProgress" class="photo-progress hidden" aria-live="polite">Préparation et envoi de la photo…</div>
     <div class="client-photo-grid">${photos.length ? photos.map(photo => `<article class="client-photo-card">
       <button class="client-photo-open" type="button" data-action="open-client-photo" data-id="${escapeHtml(photo.id)}" aria-label="Ouvrir la photo">
@@ -493,7 +496,7 @@ function renderQuotePhotos(draft) {
     ${driveReady ? `<div class="photo-actions">
       <button class="primary-button" type="button" data-action="take-quote-photo">📷 Prendre une photo</button>
       <button class="secondary-button" type="button" data-action="choose-quote-photo">🖼️ Galerie</button>
-    </div>` : `<div class="premium-lock"><strong>Google Drive requis</strong><span>Connecte Google Drive pour ajouter des photos à ce devis.</span><button class="mini-btn" type="button" data-action="connect-drive-for-quote-photos">Connecter Drive</button></div>`}
+    </div>` : `<div class="premium-lock"><strong>Cloudflare requis</strong><span>Connecte Cloudflare pour ajouter des photos à ce devis.</span><button class="mini-btn" type="button" data-action="connect-drive-for-quote-photos">Connecter Drive</button></div>`}
     <div id="quotePhotoProgress" class="photo-progress hidden" aria-live="polite">Préparation et envoi de la photo…</div>
     <div class="client-photo-grid">${photos.length ? photos.map(photo => `<article class="client-photo-card">
       <button class="client-photo-open" type="button" data-action="open-quote-photo" data-id="${escapeHtml(photo.id)}" aria-label="Ouvrir la photo">
@@ -506,7 +509,7 @@ function renderQuotePhotos(draft) {
 }
 
 async function uploadQuotePhoto(draft, file, note = '') {
-  if (!isDriveConnected()) throw new Error('Connecte Google Drive avant d’ajouter une photo.');
+  if (!isDriveConnected()) throw new Error('Connecte Cloudflare avant d’ajouter une photo.');
   const compressed = await compressPhoto(file);
   const fileName = `devis-${String(draft.id || 'terrain').replace(/[^a-z0-9_-]/gi,'-')}-${Date.now()}.jpg`;
   const metadata = {
@@ -545,7 +548,7 @@ async function handleQuotePhotoFiles(files) {
   ensureActiveDraft();
   const draft = state.activeDraft;
   if (state.photoBusy || !files?.length) return;
-  if (!isDriveConnected()) return showToast('Connecte Google Drive avant d’ajouter une photo.');
+  if (!isDriveConnected()) return showToast('Connecte Cloudflare avant d’ajouter une photo.');
   const note = files.length === 1 ? (prompt('Ajouter une note à cette photo (facultatif) :', '') || '') : '';
   state.photoBusy = true;
   const progress = document.getElementById('quotePhotoProgress');
@@ -594,7 +597,7 @@ async function openQuotePhoto(draft, photoId) {
 async function handleClientPhotoFiles(files) {
   const client = state.data.clients.find(item => item.id === state.selectedClientId);
   if (!client || state.photoBusy || !files?.length) return;
-  if (!isDriveConnected()) return showToast('Connecte Google Drive avant d’ajouter une photo.');
+  if (!isDriveConnected()) return showToast('Connecte Cloudflare avant d’ajouter une photo.');
   const note = files.length === 1 ? (prompt('Ajouter une note à cette photo (facultatif) :', '') || '') : '';
   state.photoBusy = true;
   const progress = document.getElementById('clientPhotoProgress');
@@ -631,15 +634,15 @@ async function saveCrmToDrive(showErrors = true) {
     mail: state.data.mail || {},
     tarifs: state.data.tarifs || { categories: [], subcategories: [], items: [] }
   };
-  updateSyncLine('Synchronisation Google Drive…', 'working');
+  updateSyncLine('Synchronisation Cloudflare…', 'working');
   const ok = await saveJsonToDrive(CRM_DRIVE_FILE, payload, showErrors);
-  updateSyncLine(ok ? 'Synchronisé avec Google Drive' : 'Données locales — Drive non synchronisé', ok ? 'ok' : 'warning');
+  updateSyncLine(ok ? 'Synchronisé avec Cloudflare' : 'Données locales — Drive non synchronisé', ok ? 'ok' : 'warning');
   return ok;
 }
 
 async function syncFromDrive() {
   if (!isDriveConnected()) return false;
-  updateSyncLine('Chargement depuis Google Drive…', 'working');
+  updateSyncLine('Chargement depuis Cloudflare…', 'working');
   try {
     const crm = await loadJsonFromDrive(CRM_DRIVE_FILE);
     if (crm && typeof crm === 'object') {
@@ -665,7 +668,7 @@ async function syncFromDrive() {
       }, false),
       saveJsonToDrive(DRAFTS_DRIVE_FILE, state.drafts, false)
     ]);
-    updateSyncLine('Synchronisé avec Google Drive', 'ok');
+    updateSyncLine('Synchronisé avec Cloudflare', 'ok');
     render();
     return true;
   } catch (error) {
@@ -679,12 +682,12 @@ async function connectAndSyncDrive(interactive = true) {
   try {
     await requestDriveToken(interactive);
     await syncFromDrive();
-    showToast('Google Drive connecté.');
+    showToast('Cloudflare connecté.');
     return true;
   } catch (error) {
     console.warn(error);
-    updateSyncLine('Google Drive non connecté', 'warning');
-    if (interactive) showToast('Connexion Google Drive annulée ou impossible.');
+    updateSyncLine('Cloudflare non connecté', 'warning');
+    if (interactive) showToast('Connexion Cloudflare annulée ou impossible.');
     return false;
   }
 }
@@ -714,15 +717,15 @@ async function waitForGoogleDriveSdk(timeoutMs = 5000) {
 async function requireDriveAtLaunch() {
   const wasConnected = localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1';
   setDriveGate(true, wasConnected
-    ? 'Reconnexion à Google Drive et synchronisation des visites…'
-    : 'Google Drive est nécessaire pour sécuriser les visites, photos et brouillons du Mode Terrain.');
+    ? 'Reconnexion à Cloudflare et synchronisation des visites…'
+    : 'Cloudflare est nécessaire pour sécuriser les visites, photos et brouillons du Mode Terrain.');
   await waitForGoogleDriveSdk();
   const connected = await connectAndSyncDrive(!wasConnected);
   if (connected) {
     setDriveGate(false);
     return true;
   }
-  setDriveGate(true, 'La connexion à Google Drive est nécessaire pour ouvrir le Mode Terrain.');
+  setDriveGate(true, 'La connexion à Cloudflare est nécessaire pour ouvrir le Mode Terrain.');
   return false;
 }
 
@@ -1611,7 +1614,7 @@ function updateAccountPermissionsUi() {
   const premium = hasPremiumAccess();
   if (connect) {
     connect.disabled = false;
-    connect.textContent = isDriveConnected() ? 'Google Drive connecté' : 'Connecter Google Drive';
+    connect.textContent = isDriveConnected() ? 'Cloudflare connecté' : 'Connecter Cloudflare';
   }
   if (sync) sync.disabled = false;
   const clientNav = bottomNav?.querySelector('[data-nav="clients"] small');
@@ -1629,10 +1632,10 @@ $('#syncDriveBtn')?.addEventListener('click', async () => { accountMenu.classLis
 $('#terrainDriveGateBtn')?.addEventListener('click', async () => {
   const button = $('#terrainDriveGateBtn');
   button.disabled = true;
-  $('#driveGateMessage').textContent = 'Connexion et synchronisation avec Google Drive…';
+  $('#driveGateMessage').textContent = 'Connexion et synchronisation avec Cloudflare…';
   const connected = await connectAndSyncDrive(true);
   if (connected) setDriveGate(false);
-  else setDriveGate(true, 'Connexion impossible ou annulée. Google Drive est requis pour continuer.');
+  else setDriveGate(true, 'Connexion impossible ou annulée. Cloudflare est requis pour continuer.');
 });
 
 window.addEventListener('storage', event => {
@@ -1645,6 +1648,7 @@ onAuthStateChanged(auth, async user => {
   state.currentUser = user;
   try {
     if (user) {
+      await window.BastCloudV2.bind(auth);
       await checkSubscription(user);
       if (!hasPremiumAccess()) {
         showOnly(subscriptionScreen);

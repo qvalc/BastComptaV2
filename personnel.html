@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<script src="js/core/cloudflare-files.js"></script>
+<script src="js/core/cloudflare-bootstrap.js"></script>
+<script src="js/core/cloudflare-local-storage.js"></script>
+
   <script src="js/core/storage-keys.js"></script>
   <script src="js/core/utils.js"></script>
   <script src="js/core/formatters.js"></script>
@@ -36,8 +40,8 @@
           <div class="dropdown-menu">
             <button type="button" onclick="exportDataLocal();closeFileMenu()">Exporter vers ce PC</button>
             <label class="file-label">Importer depuis ce PC<input type="file" accept="application/json" onchange="importDataLocal(event)"></label>
-            <button type="button" onclick="exportJsonToDrive();closeFileMenu()">Sauvegarder sur Google Drive</button>
-            <button type="button" onclick="loadFromDrive();closeFileMenu()">Charger depuis Google Drive</button>
+            <button type="button" onclick="exportJsonToDrive();closeFileMenu()">Sauvegarder sur Cloudflare</button>
+            <button type="button" onclick="loadFromDrive();closeFileMenu()">Charger depuis Cloudflare</button>
           </div>
         </div>
       </div>
@@ -45,7 +49,7 @@
 
     <section class="summary-toolbar">
       <div><label for="summaryYearFilter">Période des indicateurs</label><select id="summaryYearFilter" onchange="setSummaryYear(this.value)"><option value="all">Toutes années</option></select></div>
-      <div class="drive-state" id="driveState">Google Drive : en attente</div>
+      <div class="drive-state" id="driveState">Cloudflare : en attente</div>
     </section>
 
     <section class="summary-grid">

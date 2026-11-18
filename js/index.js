@@ -17,10 +17,10 @@ import {
 import {
   getFirestore,
   doc,
-  getDoc,
-  setDoc,
-  updateDoc
+  getDoc as readFirestoreProfile
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { cloudProfileAccess } from './cloudflare-profile.js';
+const {getDoc,setDoc,updateDoc} = cloudProfileAccess(readFirestoreProfile);
 
 const firebaseConfig = {
   apiKey: "AIzaSyDK3VeC-TOfXliPrY9IrHN0tFPf7KEm_j0",
@@ -487,7 +487,7 @@ async function getGoogleDriveEmail(accessToken) {
   });
 
   if (!res.ok) {
-    throw new Error('Impossible de vérifier le compte Google Drive.');
+    throw new Error('Impossible de vérifier le compte Cloudflare.');
   }
 
   const profile = await res.json();
@@ -495,6 +495,7 @@ async function getGoogleDriveEmail(accessToken) {
 }
 
 async function validateDriveAccountForCurrentUser(accessToken) {
+  if (window.BastCloudV2) {await window.BastCloudV2.ensure();return auth.currentUser?.email || '';}
   const user = auth.currentUser;
   if (!user?.uid) {
     throw new Error('Utilisateur BastCompta non connecté.');
@@ -502,7 +503,7 @@ async function validateDriveAccountForCurrentUser(accessToken) {
 
   const driveEmail = await getGoogleDriveEmail(accessToken);
   if (!driveEmail) {
-    throw new Error('Adresse email Google Drive introuvable.');
+    throw new Error('Adresse email Cloudflare introuvable.');
   }
 
   const userRef = doc(db, 'users', user.uid);
@@ -524,7 +525,7 @@ async function validateDriveAccountForCurrentUser(accessToken) {
   if (savedDriveEmail !== driveEmail) {
     disconnectGoogleDrive(true);
     throw new Error(
-      'Ce compte BastCompta est déjà lié au Google Drive : ' + savedDriveEmail
+      'Ce compte BastCompta est déjà lié au Cloudflare : ' + savedDriveEmail
     );
   }
 
@@ -533,7 +534,7 @@ async function validateDriveAccountForCurrentUser(accessToken) {
 
 function updateDriveButtons() {
   const connected = isTokenFresh();
-  connectDriveBtn.textContent = connected ? 'Google Drive connecté' : 'Connecter Google Drive';
+  connectDriveBtn.textContent = connected ? 'Cloudflare connecté' : 'Connecter Cloudflare';
   connectDriveBtn.disabled = connected || !googleDriveReady;
   disconnectDriveBtn.disabled = !connected && !wasDrivePreviouslyConnected();
 }
@@ -949,7 +950,7 @@ async function saveSingleModuleFromPortal(moduleInfo) {
       return { key, label, ok: false, message: result?.message || suppressedAlerts.join(' | ') || 'échec signalé par le module', result, suppressedAlerts };
     }
     if (key !== 'impots' && result?.drive === false) {
-      return { key, label, ok: false, message: 'Sauvegarde locale effectuée, mais la synchronisation Google Drive n’est pas confirmée. Vérifiez la connexion Drive puis relancez la sauvegarde.', result, suppressedAlerts };
+      return { key, label, ok: false, message: 'Sauvegarde locale effectuée, mais la synchronisation Cloudflare n’est pas confirmée. Vérifiez la connexion Drive puis relancez la sauvegarde.', result, suppressedAlerts };
     }
     return { key, label, ok: true, result, suppressedAlerts };
   } catch (error) {
@@ -1523,7 +1524,7 @@ function bindHiddenDriveFileButtons() {
         await refreshHiddenDriveList();
       } catch (error) {
         console.error(error);
-        alert('Impossible de supprimer ce fichier Drive caché. Vérifie la connexion Google Drive puis réessaie.');
+        alert('Impossible de supprimer ce fichier Drive caché. Vérifie la connexion Cloudflare puis réessaie.');
       } finally {
         button.disabled = false;
         button.classList.remove('is-loading');
@@ -1964,7 +1965,7 @@ async function refreshHiddenDriveList() {
   } catch (error) {
     console.error(error);
     hiddenDriveStatus.textContent =
-      'Impossible de charger les fichiers cachés Drive. Reconnecte Google Drive puis réessaie. Détail : ' +
+      'Impossible de charger les fichiers cachés Drive. Reconnecte Cloudflare puis réessaie. Détail : ' +
       (error?.message || error);
   }
 }
@@ -2134,7 +2135,7 @@ async function createFullBackupZip() {
 
   if (isTokenFresh() || wasDrivePreviouslyConnected()) {
     try {
-      backupStatus('Ajout des fichiers Google Drive cachés…', 'warning');
+      backupStatus('Ajout des fichiers Cloudflare cachés…', 'warning');
       await ensureGoogleAccessToken(false);
       const driveFiles = await listDriveAppDataFiles();
       for (const file of driveFiles) {
@@ -2273,7 +2274,7 @@ async function handleFullRestoreFile(event) {
       }
     }
 
-    if (driveFiles.length && confirm(driveFiles.length + ' fichier(s) Drive caché(s) sont présents dans la sauvegarde. Les renvoyer vers Google Drive appDataFolder ?')) {
+    if (driveFiles.length && confirm(driveFiles.length + ' fichier(s) Drive caché(s) sont présents dans la sauvegarde. Les renvoyer vers Cloudflare appDataFolder ?')) {
       await ensureGoogleAccessToken(false);
       for (const entry of driveFiles) {
         const zipItem = zip.file(entry.path);
@@ -2367,7 +2368,7 @@ async function initGoogleDrive() {
         } catch (error) {
           console.error(error);
           disconnectGoogleDrive(true);
-          setMessage(error.message || 'Compte Google Drive refusé.', 'error');
+          setMessage(error.message || 'Compte Cloudflare refusé.', 'error');
         }
       },
       error_callback: error => {
@@ -2383,13 +2384,13 @@ async function initGoogleDrive() {
     console.error(error);
     googleDriveReady = false;
     updateDriveButtons();
-    setMessage('Google Drive indisponible pour le moment. La connexion au portail reste possible.', 'warning');
+    setMessage('Cloudflare indisponible pour le moment. La connexion au portail reste possible.', 'warning');
   }
 }
 
 async function ensureGoogleAccessToken(interactive = true) {
   if (isTokenFresh()) return googleAccessToken;
-  if (!googleTokenClient) throw new Error('Google Drive n’est pas initialisé.');
+  if (!googleTokenClient) throw new Error('Cloudflare n’est pas initialisé.');
   if (googleRequestInFlight) return googleRequestInFlight;
 
   googleRequestInFlight = new Promise((resolve, reject) => {
@@ -2439,7 +2440,7 @@ async function ensureGoogleAccessToken(interactive = true) {
 
         updateDriveButtons();
 
-        reject(new Error('Autorisation Google Drive refusée.'));
+        reject(new Error('Autorisation Cloudflare refusée.'));
 
       }
     };
@@ -2459,10 +2460,10 @@ async function ensureGoogleAccessToken(interactive = true) {
 async function connectGoogleDrive() {
   try {
     await ensureGoogleAccessToken(true);
-    setMessage('Google Drive connecté.', 'success');
+    setMessage('Cloudflare connecté.', 'success');
   } catch (error) {
     console.error(error);
-    setMessage('Connexion Google Drive refusée ou impossible.', 'error');
+    setMessage('Connexion Cloudflare refusée ou impossible.', 'error');
   }
 }
 
@@ -2478,6 +2479,7 @@ async function maybeRestoreDriveConnection() {
 }
 
 function disconnectGoogleDrive(clearRemembered = true) {
+  window.BastCloudV2?.disconnect();
   if (googleAccessToken && window.google?.accounts?.oauth2) {
     try { google.accounts.oauth2.revoke(googleAccessToken); } catch (error) { console.warn(error); }
   }
@@ -3001,7 +3003,7 @@ connectDriveBtn?.addEventListener('click', async () => {
   settingsMenu?.classList.remove('open');
 
   alert(
-    "BastCompta utilise un espace privé caché de votre Google Drive pour stocker les sauvegardes.\n\n" +
+    "BastCompta utilise un espace privé caché de votre Cloudflare pour stocker les sauvegardes.\n\n" +
     "Google va demander une autorisation de stockage.\n\n" +
     "Cochez la case puis cliquez sur Continuer pour activer la sauvegarde Drive."
   );
@@ -3022,17 +3024,17 @@ if (fullBackupBtn) fullBackupBtn.addEventListener('click', () => { settingsMenu?
 if (fullRestoreBtn) fullRestoreBtn.addEventListener('click', () => { settingsMenu?.classList.remove('open'); handleFullRestoreClick(); });
 if (fullRestoreInput) fullRestoreInput.addEventListener('change', handleFullRestoreFile);
 
-const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig, 'bastcompta-v2');
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 // Ne jamais bloquer l'installation des gestionnaires du formulaire de connexion.
-// La persistance Firebase et Google Drive sont initialisés en arrière-plan.
+// La persistance Firebase et Cloudflare sont initialisés en arrière-plan.
 setPersistence(auth, browserLocalPersistence).catch(error => {
   console.warn('Persistance Firebase indisponible.', error);
 });
 initGoogleDrive().catch(error => {
-  console.warn('Initialisation Google Drive indisponible.', error);
+  console.warn('Initialisation Cloudflare indisponible.', error);
 });
 bindIframeMessaging();
 
@@ -3165,6 +3167,13 @@ onAuthStateChanged(auth, async (user) => {
 
   await user.reload().catch(() => { });
   const freshUser = auth.currentUser || user;
+  try {
+    await window.BastCloudV2.bind(auth);
+  } catch (error) {
+    showAuth();
+    setMessage('Connexion Cloudflare impossible : ' + error.message, 'error');
+    return;
+  }
 
   if (typeof window.clarity === "function") {
     window.clarity(

@@ -2,6 +2,10 @@
 
 <html lang="fr">
 <head>
+<script src="js/core/cloudflare-files.js"></script>
+<script src="js/core/cloudflare-bootstrap.js"></script>
+<script src="js/core/cloudflare-local-storage.js"></script>
+
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>BastCompta - Gestion et comptabilité simplifiée pour indépendants belges</title>
@@ -101,8 +105,8 @@
 <script src="js/ui-feedback.js?v=1"></script>
 <script src="js/keyboard-navigation.js?v=1"></script>
 <script src="js/date-inputs.js?v=1"></script>
-<script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
-<script src="https://apis.google.com/js/api.js"></script>
+
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -246,7 +250,7 @@
 </article>
 <article class="landing-stat-card">
 <strong>2 sauvegardes</strong>
-<span>possibilité de conserver une copie locale et une copie Google Drive</span>
+<span>possibilité de conserver une copie locale et une copie Cloudflare</span>
 </article>
 <article class="landing-stat-card">
 <strong>Belgique</strong>
@@ -496,7 +500,7 @@
 <div><span>✓</span><strong>Onglet Tarifs</strong><small>articles, prestations, unités et prix habituels</small></div>
 <div><span>✓</span><strong>Rappels</strong><small>suivi des factures et communications</small></div>
 <div><span>✓</span><strong>Reprise de documents</strong><small>transformez rapidement un devis en facture</small></div>
-<div><span>✓</span><strong>Google Drive</strong><small>sauvegardes et synchronisation incluses gratuitement</small></div>
+<div><span>✓</span><strong>Cloudflare</strong><small>sauvegardes et synchronisation incluses gratuitement</small></div>
 </div>
 <div class="landing-free-action">
 <p>Aucune carte bancaire nécessaire.</p>
@@ -508,7 +512,7 @@
 <h3>Besoin d'aller plus loin ?</h3>
 <p>
                 Ajoutez uniquement le pack dont vous avez besoin : Comptabilité avec TVA, IPP et Peppol,
-                Gestion d’activité pour les clients, les chantiers, le terrain et le personnel, ou Premium pour tout débloquer. Google Drive reste gratuit.
+                Gestion d’activité pour les clients, les chantiers, le terrain et le personnel, ou Premium pour tout débloquer. Cloudflare reste gratuit.
               </p>
 </div>
 <div class="landing-premium-features landing-reveal">
@@ -517,7 +521,7 @@
 <span>🧾 Préparation IPP</span>
 <span>👥 Gestion d’activité : clientèle et chantiers</span>
 <span>📱 Mode Terrain et gestion complète du personnel</span>
-<span>🔁 Google Drive gratuit</span>
+<span>🔁 Cloudflare gratuit</span>
 <span>📈 Résultat et bilan simplifié</span>
 </div>
 <div class="landing-pricing-grid landing-pack-grid">
@@ -545,7 +549,7 @@
 </article>
 </div>
 <p class="landing-pricing-note landing-reveal">
-              * Le module Gestion commerciale, les sauvegardes et Google Drive restent gratuits sans limite de durée. Le Mode Terrain et le Personnel sont inclus dans le Pack Gestion d’activité et Premium.
+              * Le module Gestion commerciale, les sauvegardes et Cloudflare restent gratuits sans limite de durée. Le Mode Terrain et le Personnel sont inclus dans le Pack Gestion d’activité et Premium.
               BastCompta reste un outil d'aide à la gestion et à la préparation administrative :
               il ne remplace pas un comptable, Tax-on-web, Intervat ou une plateforme officielle.
             </p>
@@ -676,8 +680,8 @@
 <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
 <button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
 <button id="trashBtn" type="button">Corbeille <span class="settings-count" id="trashCount">0</span></button>
-<button id="connectDriveBtn" type="button">Connecter Google Drive</button>
-<button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
+<button id="connectDriveBtn" type="button">Connecter Cloudflare</button>
+<button id="disconnectDriveBtn" type="button">Déconnecter Cloudflare</button>
 <button id="sendVerificationBtn" type="button">Renvoyer l’email de vérification</button>
 <button id="openHelpBtn" type="button">Présentation &amp; FAQ</button>
 <div class="settings-separator"></div>
@@ -753,7 +757,7 @@
 <div class="drive-modal-head">
 <div>
 <h3>Fichiers Drive cachés</h3>
-<p>Contenu du dossier Google Drive appDataFolder utilisé par BastCompta. Ces fichiers ne sont pas visibles
+<p>Contenu du dossier Cloudflare appDataFolder utilisé par BastCompta. Ces fichiers ne sont pas visibles
             dans l’interface Drive classique.</p>
 </div>
 <div class="user-actions">
