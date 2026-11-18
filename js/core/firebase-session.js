@@ -5,6 +5,13 @@ export function initializeV2Auth(app, initializeAuth, persistence) {
   return initializeAuth(app, {persistence});
 }
 
+export function terrainSessionUrl(source,base) {
+  if(!source)return '';
+  const url=new URL(source,base);
+  url.searchParams.set('v2Session','local-auth-20261118');
+  return url.href;
+}
+
 // Firebase emits auth-state changes only when the UID changes. An explicit login
 // retry must therefore also be able to retry an earlier portal-loading failure.
 export function createPortalSession({currentUser,open,close,onError}) {

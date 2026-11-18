@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {initializeV2Auth,createPortalSession} from '../js/core/firebase-session.js';
+import {initializeV2Auth,createPortalSession,terrainSessionUrl} from '../js/core/firebase-session.js';
+test('Terrain loads the corrected HTML even if its previous iframe is cached',()=>{
+  const url=new URL(terrainSessionUrl('terrain.html?embedded=1','https://qvalc.github.io/BastComptaV2/'));
+  assert.equal(url.origin,'https://qvalc.github.io');assert.equal(url.pathname,'/BastComptaV2/terrain.html');
+  assert.equal(url.searchParams.get('embedded'),'1');assert.equal(url.searchParams.get('v2Session'),'local-auth-20261118');
+});
 test('portal and Terrain select LOCAL before Firebase can migrate a different frame session',()=>{
   const local={type:'LOCAL'},calls=[];
   const sdk=(app,options)=>{calls.push({app,options});return {app,options};};

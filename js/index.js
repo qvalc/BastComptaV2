@@ -19,7 +19,7 @@ import {
   getDoc as readFirestoreProfile
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 import { cloudProfileAccess } from './cloudflare-profile.js';
-import { initializeV2Auth, createPortalSession } from './core/firebase-session.js';
+import { initializeV2Auth, createPortalSession, terrainSessionUrl } from './core/firebase-session.js';
 const {getDoc,setDoc,updateDoc} = cloudProfileAccess(readFirestoreProfile);
 
 const firebaseConfig = {
@@ -572,7 +572,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
   ].forEach(({ tab, frame }) => {
     if (!frame) return;
 
-    const targetSrc = frame.dataset.src || '';
+    const targetSrc = frame === terrainFrame ? terrainSessionUrl(frame.dataset.src || '', window.location.href) : (frame.dataset.src || '');
     const canLoad = hasModuleAccess(tab, subscription);
 
     if (!canLoad) {
