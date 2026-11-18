@@ -1,9 +1,9 @@
-/* BastCompta - client HTTP commun pour Google Drive appDataFolder. */
+/* BastCompta - client HTTP commun pour Cloudflare appDataFolder. */
 (function (global) {
   'use strict';
 
   async function request(accessToken, url, options = {}) {
-    if (!accessToken) throw new Error('Google Drive non connecté.');
+    if (!accessToken) throw new Error('Cloudflare non connecté.');
     return fetch(url, {
       ...options,
       headers: { Authorization: `Bearer ${accessToken}`, ...(options.headers || {}) }
@@ -36,7 +36,7 @@
 
   async function checked(response) {
     if (response.ok) return response;
-    const error = new Error(await response.text() || `Google Drive ${response.status}`);
+    const error = new Error(await response.text() || `Cloudflare ${response.status}`);
     error.status = response.status;
     throw error;
   }

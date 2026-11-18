@@ -797,16 +797,16 @@ function updateSyncStatusIndicator() {
   syncStatusPill.classList.remove('sync-ok', 'sync-pending', 'sync-error', 'sync-unknown');
   if (hasError) {
     syncStatusPill.classList.add('sync-error');
-    syncStatusText.textContent = 'Erreur Drive';
+    syncStatusText.textContent = 'Erreur Cloudflare';
     syncStatusPill.title = 'Une sauvegarde a échoué. Cliquez pour relancer.';
   } else if (isSyncing) {
     syncStatusPill.classList.add('sync-pending');
     syncStatusText.textContent = 'Synchronisation…';
-    syncStatusPill.title = 'Sauvegarde locale et synchronisation Drive en cours.';
+    syncStatusPill.title = 'Sauvegarde locale et synchronisation Cloudflare en cours.';
   } else if (dirtyCount > 0) {
     syncStatusPill.classList.add('sync-pending');
     syncStatusText.textContent = `${dirtyCount} modification${dirtyCount > 1 ? 's' : ''}`;
-    syncStatusPill.title = 'Des modifications ne sont pas encore confirmées sur Drive.';
+    syncStatusPill.title = 'Des modifications ne sont pas encore confirmées sur Cloudflare.';
   } else if (states.length && states.every(state => state.syncedOnce)) {
     syncStatusPill.classList.add('sync-ok');
     syncStatusText.textContent = 'Synchronisé';
@@ -847,7 +847,7 @@ window.BastComptaPortal = Object.assign(window.BastComptaPortal || {}, {
     const state = getModuleSyncState(moduleKey);
 
     // Le module peut fournir l’état exact juste AVANT la première action de
-    // l’utilisateur. Cela évite qu’un chargement asynchrone (Drive, tarifs,
+    // l’utilisateur. Cela évite qu’un chargement asynchrone (Cloudflare, tarifs,
     // calculs automatiques...) rende la référence du portail périmée.
     if (!state.dirty && state.snapshotTimer === null && beforeSnapshot !== null) {
       const candidate = stableSnapshotString(beforeSnapshot);
@@ -950,7 +950,7 @@ async function saveSingleModuleFromPortal(moduleInfo) {
       return { key, label, ok: false, message: result?.message || suppressedAlerts.join(' | ') || 'échec signalé par le module', result, suppressedAlerts };
     }
     if (key !== 'impots' && result?.drive === false) {
-      return { key, label, ok: false, message: 'Sauvegarde locale effectuée, mais la synchronisation Cloudflare n’est pas confirmée. Vérifiez la connexion Drive puis relancez la sauvegarde.', result, suppressedAlerts };
+      return { key, label, ok: false, message: 'Sauvegarde locale effectuée, mais la synchronisation Cloudflare n’est pas confirmée. Vérifiez la connexion Cloudflare puis relancez la sauvegarde.', result, suppressedAlerts };
     }
     return { key, label, ok: true, result, suppressedAlerts };
   } catch (error) {
@@ -968,10 +968,10 @@ function formatModuleSaveLine(item) {
   if (!item.ok) return `✖ ${item.label} : ERREUR — ${item.message || 'erreur inconnue'}`;
   const details = [];
   if (result.local) details.push('local OK');
-  if (typeof result.drive === 'boolean') details.push(result.drive ? 'Drive OK' : 'Drive non utilisé / non connecté');
+  if (typeof result.drive === 'boolean') details.push(result.drive ? 'Cloudflare OK' : 'Cloudflare non utilisé / non connecté');
   if (result.chantierLinked || result.chantierSynced) details.push('suivi/chantiers OK');
-  if (typeof result.exportedDocumentsCount === 'number') details.push(`${result.exportedDocumentsCount} document(s) Drive`);
-  else if (Array.isArray(result.exportedDocuments)) details.push(`${result.exportedDocuments.length} document(s) Drive`);
+  if (typeof result.exportedDocumentsCount === 'number') details.push(`${result.exportedDocumentsCount} document(s) Cloudflare`);
+  else if (Array.isArray(result.exportedDocuments)) details.push(`${result.exportedDocuments.length} document(s) Cloudflare`);
   if (Array.isArray(result.warnings) && result.warnings.length) details.push(`avertissement(s): ${result.warnings.join(' ; ')}`);
   return `✔ ${item.label} : ${details.length ? details.join(', ') : 'OK'}`;
 }
@@ -1850,7 +1850,7 @@ async function driveRequest(path, options = {}) {
       ...(options.headers || {})
     }
   });
-  if (!res.ok) throw new Error('Drive API error ' + res.status);
+  if (!res.ok) throw new Error('Cloudflare API error ' + res.status);
   return res;
 }
 
@@ -1879,7 +1879,7 @@ async function downloadDriveFileBlob(file) {
   const res = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file.id) + '?alt=media', {
     headers: { Authorization: 'Bearer ' + token }
   });
-  if (!res.ok) throw new Error('Téléchargement Drive impossible: ' + res.status);
+  if (!res.ok) throw new Error('Téléchargement Cloudflare impossible: ' + res.status);
   return await res.blob();
 }
 
@@ -1900,7 +1900,7 @@ async function deleteHiddenDriveFile(file) {
     method: 'DELETE',
     headers: { Authorization: 'Bearer ' + token }
   });
-  if (!res.ok && res.status !== 204) throw new Error('Suppression Drive impossible: ' + res.status);
+  if (!res.ok && res.status !== 204) throw new Error('Suppression Cloudflare impossible: ' + res.status);
   return true;
 }
 
@@ -1956,7 +1956,7 @@ async function refreshHiddenDriveList() {
 
   try {
     // Ici on force une demande interactive si le token Google n'est plus frais.
-    // Sans ça, le bouton peut indiquer Drive connecté via Firestore/localStorage,
+    // Sans ça, le bouton peut indiquer Cloudflare connecté via Firestore/localStorage,
     // mais l'accès à appDataFolder échoue parce que le token OAuth en mémoire est expiré.
     await ensureGoogleAccessToken(true);
 
@@ -1986,7 +1986,7 @@ function backupZipPathForDriveFile(file, parsed = null, registry = null) {
     if (lower.startsWith('facture-')) return 'Clients/Sans client/Factures/' + name;
     if (lower.startsWith('rappel-')) return 'Clients/Sans client/Rappels/' + name;
   }
-  return 'Google-Drive-AppData/' + name;
+  return 'Google-Cloudflare-AppData/' + name;
 }
 
 async function addApplicationSourceFiles(zip) {
@@ -2146,7 +2146,7 @@ async function createFullBackupZip() {
           if (String(file.name || '').toLowerCase().endsWith('.json')) parsed = JSON.parse(await blob.text());
           if (!blob) blob = await downloadDriveFileBlob(file);
         } catch (error) {
-          console.warn('Fichier Drive ignoré :', file.name, error);
+          console.warn('Fichier Cloudflare ignoré :', file.name, error);
           continue;
         }
 
@@ -2169,8 +2169,8 @@ async function createFullBackupZip() {
         }
       }
     } catch (error) {
-      console.warn('Sauvegarde Drive ignorée :', error);
-      manifest.driveWarning = error?.message || 'Drive indisponible';
+      console.warn('Sauvegarde Cloudflare ignorée :', error);
+      manifest.driveWarning = error?.message || 'Cloudflare indisponible';
     }
   }
 
@@ -2257,7 +2257,7 @@ async function uploadBlobToDriveAppData(blob, name, mimeType = 'application/json
     headers: { Authorization: 'Bearer ' + token },
     body: form
   });
-  if (!res.ok) throw new Error('Upload Drive impossible: ' + res.status);
+  if (!res.ok) throw new Error('Upload Cloudflare impossible: ' + res.status);
   return await res.json();
 }
 
@@ -2412,7 +2412,7 @@ async function maybeRestoreDriveConnection() {
   try {
     await ensureGoogleAccessToken(false);
   } catch (error) {
-    console.warn('Reconnexion silencieuse Drive impossible.', error);
+    console.warn('Reconnexion silencieuse Cloudflare impossible.', error);
     updateDriveButtons();
   }
 }
@@ -2944,7 +2944,7 @@ connectDriveBtn?.addEventListener('click', async () => {
   alert(
     "BastCompta utilise un espace privé caché de votre Cloudflare pour stocker les sauvegardes.\n\n" +
     "Google va demander une autorisation de stockage.\n\n" +
-    "Cochez la case puis cliquez sur Continuer pour activer la sauvegarde Drive."
+    "Cochez la case puis cliquez sur Continuer pour activer la sauvegarde Cloudflare."
   );
 
   try {

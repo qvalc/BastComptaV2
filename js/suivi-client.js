@@ -393,11 +393,11 @@ async function saveCrmDataToDrive(crmData, showToast = false) {
         : { Authorization: `Bearer ${googleAccessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
       body
     });
-    if (!response.ok) throw new Error('Drive CRM status ' + response.status);
+    if (!response.ok) throw new Error('Cloudflare CRM status ' + response.status);
     if (showToast) notify('CRM sauvegardé localement et sur Cloudflare.');
     return true;
   } catch (error) {
-    console.warn('Sauvegarde CRM Drive ignorée.', error);
+    console.warn('Sauvegarde CRM Cloudflare ignorée.', error);
     if (showToast) notify('CRM sauvegardé localement. Cloudflare non disponible pour le moment.');
     return false;
   }
@@ -414,7 +414,7 @@ async function refreshCrmClientDropdown(showToast = false) {
       const file = list?.result?.files?.[0];
       if (file) {
         const parsed = await fetchDriveJson(file.id);
-        const driveClients = Array.isArray(parsed?.clients) ? parsed.clients.map(client => ({ ...client, source: 'CRM Drive' })) : [];
+        const driveClients = Array.isArray(parsed?.clients) ? parsed.clients.map(client => ({ ...client, source: 'CRM Cloudflare' })) : [];
         const filteredDriveClients = filterDeletedCrmClients(driveClients);
         crmDriveClientsCache = filteredDriveClients;
         if (driveClients.length !== filteredDriveClients.length && parsed && typeof parsed === 'object') {
@@ -423,7 +423,7 @@ async function refreshCrmClientDropdown(showToast = false) {
         }
       }
     } catch (error) {
-      console.warn('Lecture CRM Drive ignorée.', error);
+      console.warn('Lecture CRM Cloudflare ignorée.', error);
     }
   }
   renderCrmClientDropdown();
@@ -441,7 +441,7 @@ function openCrmClientModal(client = {}) {
         <div class="modal-head">
           <div>
             <h2>${normalized.id || normalized.name ? 'Modifier client CRM' : 'Nouveau client CRM'}</h2>
-            <div class="hint">Ce formulaire écrit dans le CRM officiel utilisé par la Gestion commerciale (<strong>${escapeHtml(CRM_DRIVE_SYNC_FILE_NAME)}</strong> si Drive est connecté).</div>
+            <div class="hint">Ce formulaire écrit dans le CRM officiel utilisé par la Gestion commerciale (<strong>${escapeHtml(CRM_DRIVE_SYNC_FILE_NAME)}</strong> si Cloudflare est connecté).</div>
           </div>
           <button class="small ghost" onclick="closeGenericModal()">✕</button>
         </div>
@@ -539,7 +539,7 @@ async function deleteCrmClientFromModal() {
   await refreshCrmClientDropdown(false);
   selectedProjectId = '';
   render();
-  notify(googleAccessToken ? 'Client CRM supprimé localement et sur Cloudflare.' : 'Client CRM supprimé localement. La suppression sera conservée et appliquée à Drive à la prochaine connexion.');
+  notify(googleAccessToken ? 'Client CRM supprimé localement et sur Cloudflare.' : 'Client CRM supprimé localement. La suppression sera conservée et appliquée à Cloudflare à la prochaine connexion.');
 }
 
 async function submitCrmClientForm() {
@@ -596,7 +596,7 @@ async function autoLoadClientDocuments(showToast = false) {
   const hydrated = hydrateProjectWithCrm(project);
   const localDocs = getLocalCrmDocumentsForProject(hydrated);
   const driveDocs = await getDriveCrmDocumentsForProject(hydrated);
-  // Un export Drive ancien ne doit pas réécrire le montant du document local corrigé.
+  // Un export Cloudflare ancien ne doit pas réécrire le montant du document local corrigé.
   const localKeys = new Set(localDocs.map(doc => `${doc.key}:${doc.ref}`));
   crmDocumentLinkCache = dedupeCrmDocs([...localDocs, ...driveDocs.filter(doc => !localKeys.has(`${doc.key}:${doc.ref}`))]);
   if (crmDocumentLinkCache.length) {
@@ -1235,7 +1235,7 @@ async function loadTerrainDraftsFromDrive() {
     saveTerrainDrafts(parsed);
     return true;
   } catch (error) {
-    console.error('Chargement des brouillons Terrain depuis Drive impossible.', error);
+    console.error('Chargement des brouillons Terrain depuis Cloudflare impossible.', error);
     return false;
   }
 }
@@ -1267,7 +1267,7 @@ async function saveTerrainDraftsToDrive(drafts) {
     });
     return !!response && response.ok;
   } catch (error) {
-    console.error('Sauvegarde des brouillons Terrain sur Drive impossible.', error);
+    console.error('Sauvegarde des brouillons Terrain sur Cloudflare impossible.', error);
     return false;
   }
 }
@@ -1739,7 +1739,7 @@ async function getLinkedDocumentSourcePayload(type, item) {
       const parsed = await fetchDriveJson(item.fileId);
       if (parsed?.[docKey]) return parsed;
     } catch (error) {
-      console.warn('FileId Drive invalide, recherche par nom...', item.fileId, error);
+      console.warn('FileId Cloudflare invalide, recherche par nom...', item.fileId, error);
     }
   }
 
@@ -2320,10 +2320,10 @@ async function deleteCrmLinkedDocument(type, itemId) {
       }, false);
 
       if (res && !res.ok && res.status !== 404) {
-        console.warn('Suppression Drive impossible, retrait local quand même.');
+        console.warn('Suppression Cloudflare impossible, retrait local quand même.');
       }
     } catch (err) {
-      console.warn('Fichier Drive déjà absent ou suppression impossible, retrait local quand même.', err);
+      console.warn('Fichier Cloudflare déjà absent ou suppression impossible, retrait local quand même.', err);
     }
   }
 
@@ -3008,13 +3008,13 @@ async function downloadCrmDocumentFromCache(type, ref) {
 
 async function deleteCrmDocumentFromCache(type, ref) {
   const doc = getCrmDocumentFromCache(type, ref);
-  if (!doc?.fileId) return notify('Ce document n’a pas de fichier Drive à supprimer.');
+  if (!doc?.fileId) return notify('Ce document n’a pas de fichier Cloudflare à supprimer.');
   if (!confirm(`Supprimer définitivement ${doc.fileName || doc.label + ' ' + doc.ref} de Cloudflare ?`)) return;
   const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${doc.fileId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${googleAccessToken}` }
   }, false);
-  if (!res || !res.ok) return notify('Suppression Drive impossible.');
+  if (!res || !res.ok) return notify('Suppression Cloudflare impossible.');
   crmDocumentLinkCache = (crmDocumentLinkCache || []).filter(item => item.fileId !== doc.fileId);
   const project = getProject();
   if (project) {
@@ -3130,8 +3130,8 @@ async function importInvoiceJsonToCurrentClient(event) {
     renderMain();
 
     notify(driveFile?.id
-      ? `Facture ${ref} ajoutée au client et enregistrée dans Drive.`
-      : `Facture ${ref} ajoutée au client, mais Drive n'a pas été enregistré.`
+      ? `Facture ${ref} ajoutée au client et enregistrée dans Cloudflare.`
+      : `Facture ${ref} ajoutée au client, mais Cloudflare n'a pas été enregistré.`
     );
   } catch (error) {
     console.error(error);
@@ -3382,7 +3382,7 @@ async function handleDocumentUpload(event) {
         driveDownloadable = !!driveFileId;
       } catch (error) {
         console.error(error);
-        notify('Un fichier n’a pas pu être envoyé sur Drive : ' + file.name);
+        notify('Un fichier n’a pas pu être envoyé sur Cloudflare : ' + file.name);
       }
     }
 
@@ -3424,7 +3424,7 @@ async function uploadFileToDrive(file, name) {
     body: form
   });
 
-  if (!response || !response.ok) throw new Error(response ? await response.text() : 'Drive non disponible');
+  if (!response || !response.ok) throw new Error(response ? await response.text() : 'Cloudflare non disponible');
   return response.json();
 }
 
@@ -3443,7 +3443,7 @@ async function downloadDocument(id) {
   });
 
   if (!response || !response.ok) {
-    notify('Téléchargement impossible depuis Drive.');
+    notify('Téléchargement impossible depuis Cloudflare.');
     return;
   }
 
@@ -3560,7 +3560,7 @@ async function exportJsonToDrive() {
   }
 
   const ok = await saveSyncToDrive(true);
-  notify(ok ? 'Suivis clients sauvegardés sur Cloudflare.' : 'Sauvegarde Drive impossible.');
+  notify(ok ? 'Suivis clients sauvegardés sur Cloudflare.' : 'Sauvegarde Cloudflare impossible.');
 }
 
 async function loadFromDrive() {
@@ -3572,7 +3572,7 @@ async function loadFromDrive() {
   if (!confirm('Charger les suivis clients depuis Cloudflare remplacera les données locales. Continuer ?')) return;
 
   const ok = await loadSyncDataFromDriveIfAvailable();
-  notify(ok ? 'Suivis clients chargés depuis Cloudflare.' : 'Aucun fichier suivi client trouvé sur Drive.');
+  notify(ok ? 'Suivis clients chargés depuis Cloudflare.' : 'Aucun fichier suivi client trouvé sur Cloudflare.');
   render();
 }
 

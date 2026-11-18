@@ -1,4 +1,4 @@
-/* BastCompta - accès Google Drive des factures PDF d'achat. */
+/* BastCompta - accès Cloudflare des factures PDF d'achat. */
 (function (global) {
   'use strict';
 

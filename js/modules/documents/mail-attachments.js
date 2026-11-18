@@ -1,4 +1,4 @@
-/* BastCompta - archivage Drive des pièces jointes envoyées. */
+/* BastCompta - archivage Cloudflare des pièces jointes envoyées. */
 (function (global) {
   'use strict';
 
@@ -23,9 +23,9 @@
   }
 
   async function read(item, options = {}) {
-    if (!item?.attachmentFileId) throw new Error('Cette pièce jointe n’est pas archivée dans Drive.');
+    if (!item?.attachmentFileId) throw new Error('Cette pièce jointe n’est pas archivée dans Cloudflare.');
     const accessToken = options.accessToken || '';
-    if (!accessToken) throw new Error('Reconnecte Google Drive pour ouvrir cette pièce jointe.');
+    if (!accessToken) throw new Error('Reconnecte Cloudflare pour ouvrir cette pièce jointe.');
     const driveClient = options.driveClient || global.BastComptaDriveClient;
     return driveClient.readFile(accessToken, item.attachmentFileId, { as: 'blob' });
   }

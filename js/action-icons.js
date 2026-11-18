@@ -14,9 +14,9 @@
     edit:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>',
     refresh:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v6h-6"/><path d="M4 18v-6h6"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></svg>',
     settings:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>',
-    drive:'<svg class="bast-drive-mark" viewBox="0 0 64 64" aria-hidden="true"><path class="bast-drive-green" d="M25 7h14l18 31H43z"/><path class="bast-drive-yellow" d="M25 7 7 38l7 12 18-31z"/><path class="bast-drive-blue" d="M14 50h36l7-12H21z"/></svg>',
-    'drive-import':'<svg class="bast-drive-mark" viewBox="0 0 64 64" aria-hidden="true"><path class="bast-drive-green" d="M25 7h14l18 31H43z"/><path class="bast-drive-yellow" d="M25 7 7 38l7 12 18-31z"/><path class="bast-drive-blue" d="M14 50h36l7-12H21z"/><circle class="bast-drive-action-disc" cx="47" cy="47" r="12"/><path class="bast-drive-action-arrow" d="M47 39v14m-6-6 6 6 6-6"/></svg>',
-    'drive-export':'<svg class="bast-drive-mark" viewBox="0 0 64 64" aria-hidden="true"><path class="bast-drive-green" d="M25 7h14l18 31H43z"/><path class="bast-drive-yellow" d="M25 7 7 38l7 12 18-31z"/><path class="bast-drive-blue" d="M14 50h36l7-12H21z"/><circle class="bast-drive-action-disc" cx="47" cy="47" r="12"/><path class="bast-drive-action-arrow" d="M47 54V40m-6 6 6-6 6 6"/></svg>',
+    drive:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17a4 4 0 0 1-1-7.87 7 7 0 0 1 13-1A4.5 4.5 0 0 1 19 17"/><path d="M7 17h10"/></svg>',
+    'drive-import':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17a4 4 0 0 1-1-7.87 7 7 0 0 1 13-1A4.5 4.5 0 0 1 19 17"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg>',
+    'drive-export':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17a4 4 0 0 1-1-7.87 7 7 0 0 1 13-1A4.5 4.5 0 0 1 19 17"/><path d="M12 21v-9m-3 3 3-3 3 3"/></svg>',
     copy:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
     file:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/></svg>',
     xml:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 9-3 3 3 3M16 9l3 3-3 3M14 6l-4 12"/></svg>',
@@ -44,7 +44,7 @@
     if (/telecharg/.test(s)) return ['download','download'];
     if (/import|charger depuis/.test(s)) return ['import','import'];
     if (/envoyer.*drive|vers drive/.test(s)) return ['upload','upload'];
-    if (/google drive|drive/.test(s)) return ['drive','drive'];
+    if (/cloudflare|google drive|drive/.test(s)) return ['drive','drive'];
     if (/xml|peppol/.test(s)) return ['xml','xml'];
     if (/copier/.test(s)) return ['copy','copy'];
     if (/parametre|reglage/.test(s)) return ['settings','settings'];
@@ -75,7 +75,7 @@
     if (!label || label.length > 70) return false;
     const actionArea = el.closest('.toolbar-actions,.topbar .actions,.topbar .top-actions,.article-toolbar,.profile-actions,.workspace-head .actions,.section-head,.section-title-row,.global-head,.panel-head-row,.peppol-actions,.mail-preview-actions,.mail-sender-actions,.tarif-card-actions,.tarif-component-actions,.actions');
     if (actionArea) return true;
-    return /^(\+\s*)?(Ajouter|Nouveau|Nouvelle|Créer|Modifier|Reprendre|Imprimer|Exporter|Importer|Télécharger|Sauvegarder|Enregistrer|Actualiser|Relancer|Recharger|Supprimer|Vider|Copier|Ouvrir|Voir|Afficher|Consulter|Envoyer|Intervat|Google Drive|Paramètres|Modèle Excel)/i.test(label);
+    return /^(\+\s*)?(Ajouter|Nouveau|Nouvelle|Créer|Modifier|Reprendre|Imprimer|Exporter|Importer|Télécharger|Sauvegarder|Enregistrer|Actualiser|Relancer|Recharger|Supprimer|Vider|Copier|Ouvrir|Voir|Afficher|Consulter|Envoyer|Intervat|Cloudflare|Paramètres|Modèle Excel)/i.test(label);
   }
 
   function iconify(el){

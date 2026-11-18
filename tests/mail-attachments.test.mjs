@@ -33,7 +33,7 @@ assert.deepEqual(await attachments.read({ attachmentFileId: 'drive-1' }, { acces
 assert.equal(await attachments.remove({ attachmentFileId: 'drive-1' }, { accessToken: 'token', driveClient }), true);
 assert.equal(await attachments.remove({}, { accessToken: 'token', driveClient }), false);
 await assert.rejects(() => attachments.read({}, { accessToken: 'token', driveClient }), /n’est pas archivée/);
-await assert.rejects(() => attachments.read({ attachmentFileId: 'drive-1' }, { driveClient }), /Reconnecte Google Drive/);
+await assert.rejects(() => attachments.read({ attachmentFileId: 'drive-1' }, { driveClient }), /Reconnecte Cloudflare/);
 const removed = await attachments.removeAll([{ attachmentFileId: 'a' }, {}, { attachmentFileId: 'b' }], { accessToken: 'token', driveClient });
 assert.equal(removed.length, 2);
 

@@ -112,7 +112,7 @@ async function driveFilesList(params, showAlert401 = true) {
     }
 
     if (error?.status === 400 && params?.q) {
-      console.warn('Requête Drive filtrée refusée, repli sur liste complète appDataFolder.', params.q, error);
+      console.warn('Requête Cloudflare filtrée refusée, repli sur liste complète appDataFolder.', params.q, error);
       const fallback = await listDriveFilesDirect({
         spaces: params.spaces || 'appDataFolder',
         pageSize: params.pageSize || 100,
@@ -461,7 +461,7 @@ function renderDriveColumn(type, title) {
         <div class="crm-drive-column">
           <h3 style="margin:0 0 10px; font-size:18px;">${escapeHtml(title)}${docs.length ? ` (${docs.length})` : ''}</h3>
           <div class="drive-file-list">
-            ${items || `<div class="simple-box">Aucun ${escapeHtml(title.toLowerCase())} sur Drive.</div>`}
+            ${items || `<div class="simple-box">Aucun ${escapeHtml(title.toLowerCase())} sur Cloudflare.</div>`}
           </div>
         </div>
       `;
@@ -533,7 +533,7 @@ async function loadDriveFiles(showAlert = true) {
 
     render();
 
-    // Ne construit plus automatiquement l'index complet de tous les documents Drive.
+    // Ne construit plus automatiquement l'index complet de tous les documents Cloudflare.
     // Cet index est chargé à la demande à l'ouverture du CRM, ou plus tard en arrière-plan.
     if (activePage === 'crm') {
       ensureDriveIndexForCrm(false).catch(console.error);
@@ -542,7 +542,7 @@ async function loadDriveFiles(showAlert = true) {
   } catch (error) {
     console.error(error);
 
-    if (showAlert) alert("Impossible de charger la liste des sauvegardes Drive. Vérifie la connexion Cloudflare dans le portail.");
+    if (showAlert) alert("Impossible de charger la liste des sauvegardes Cloudflare. Vérifie la connexion Cloudflare dans le portail.");
   }
 }
 
@@ -1920,7 +1920,7 @@ function scheduleDriveIndexInBackground() {
   const run = () => {
     driveIndexBackgroundHandle = null;
     ensureDriveIndexForCrm(false).catch(error => {
-      console.error('Erreur pendant l’indexation différée de Drive :', error);
+      console.error('Erreur pendant l’indexation différée de Cloudflare :', error);
     });
   };
 
@@ -2005,7 +2005,7 @@ async function loadDriveJsonFileById(fileId, showAlert = true) {
       data.reminder = mergeDeep(structuredClone(defaultData.reminder), parsed.reminder);
       activePage = 'reminder';
     } else {
-      console.warn('Document Drive non reconnu', { fileId, file, parsed });
+      console.warn('Document Cloudflare non reconnu', { fileId, file, parsed });
       throw new Error('Type de document inconnu.');
     }
 
@@ -2133,7 +2133,7 @@ function getSelectedDriveIdsForClient(clientId) {
 function selectAllDriveFilesForClient(clientId) {
   const ids = getClientDriveDocIds(clientId);
   if (!ids.length) {
-    alert('Aucun fichier Drive lié à ce client.');
+    alert('Aucun fichier Cloudflare lié à ce client.');
     return;
   }
   selectedDriveFileIds = [...new Set([...selectedDriveFileIds, ...ids])];
@@ -2657,11 +2657,11 @@ function renderCRMInner() {
           <div class="simple-box" style="margin-top:16px; margin-bottom:16px;">
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
               <div>
-                <strong>Documents Drive liés à ce client</strong><br>
+                <strong>Documents Cloudflare liés à ce client</strong><br>
                 <span class="hint">Radio = charger. Case = télécharger ou supprimer.</span>
               </div>
               <div class="inline-actions no-print">
-                <button type="button" onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Drive</button>
+                <button type="button" onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Cloudflare</button>
               </div>
             </div>
             <div class="inline-actions no-print" style="margin-top:12px;">
@@ -2675,7 +2675,7 @@ function renderCRMInner() {
 <div class="simple-box no-print" style="margin-top:14px;">
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
       <div>
-        <strong>Documents Drive liés à ce client</strong><br>
+        <strong>Documents Cloudflare liés à ce client</strong><br>
         <span class="hint">Radio = charger. Case = télécharger ou supprimer.</span>
       </div>
       <div class="inline-actions">
@@ -2713,7 +2713,7 @@ function renderCRMInner() {
       <h2>Carnet d'adresses / CRM</h2>
 
       <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
-        Le bouton <strong>Sauvegarder</strong> met à jour automatiquement le CRM sur Cloudflare sans créer de doublon quand la connexion Drive est active.
+        Le bouton <strong>Sauvegarder</strong> met à jour automatiquement le CRM sur Cloudflare sans créer de doublon quand la connexion Cloudflare est active.
         À la reconnexion, le CRM est rechargé automatiquement.
       </div>
 
@@ -2742,8 +2742,8 @@ function renderCRM() {
   <div class="hint">Le CRM se gère ici, puis devis et facture récupèrent simplement les infos client.</div>
   <div class="inline-actions">
     <button class="primary" onclick="createNewClient()">Nouveau client</button>
-    <button onclick="loadDriveFiles()">Actualiser Drive</button>
-    <button onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Drive</button>
+    <button onclick="loadDriveFiles()">Actualiser Cloudflare</button>
+    <button onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Cloudflare</button>
     <button onclick="downloadHiddenCrmSyncFromDrive()">Télécharger le CRM caché</button>
   </div>
 </div>
@@ -3063,7 +3063,7 @@ async function sendDocumentEmail(docKey) {
     try {
       attachmentArchive = await archiveSentMailAttachment(pdfBase64, finalPdfName);
     } catch (error) {
-      console.warn('Archivage Drive du PDF envoyé impossible.', error);
+      console.warn('Archivage Cloudflare du PDF envoyé impossible.', error);
     }
 
     recordSentMail({
@@ -3082,8 +3082,8 @@ async function sendDocumentEmail(docKey) {
     });
     await persistSentMailHistory();
     const archiveText = attachmentArchive
-      ? ' Une copie du PDF est archivée dans Drive.'
-      : ' Le message est conservé, mais le PDF n’a pas pu être archivé dans Drive.';
+      ? ' Une copie du PDF est archivée dans Cloudflare.'
+      : ' Le message est conservé, mais le PDF n’a pas pu être archivé dans Cloudflare.';
     alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe.${archiveText}`);
   } catch (error) {
     console.error('Envoi e-mail Brevo impossible :', error);
@@ -3195,7 +3195,7 @@ async function openInvoicePreviewByNumberFromDrive(invoiceNumber, preferredFileI
     const file = await findInvoiceDriveFileByNumber(normalized, preferredFileId);
     if (!file) {
       isOpeningInvoiceFromAccounting = false;
-      alert(`Aucune facture trouvée sur Drive pour le numéro ${normalized}.`);
+      alert(`Aucune facture trouvée sur Cloudflare pour le numéro ${normalized}.`);
       return false;
     }
 
@@ -3304,7 +3304,7 @@ window.addEventListener('message', async (event) => {
             render();
             scheduleDriveIndexInBackground();
           } catch (error) {
-            console.error('Erreur pendant le chargement différé des données Drive :', error);
+            console.error('Erreur pendant le chargement différé des données Cloudflare :', error);
           }
         };
 
@@ -3705,7 +3705,7 @@ async function openDevisPage(pageKey) {
   render();
 
   // Le CRM reste entièrement accessible dans la Gestion commerciale.
-  // Son index Drive est simplement construit au premier accès au lieu de ralentir
+  // Son index Cloudflare est simplement construit au premier accès au lieu de ralentir
   // l'ouverture initiale d'une facture.
   if (pageKey === 'crm') {
     await ensureDriveIndexForCrm(false);
@@ -4270,8 +4270,8 @@ function saveTarifsData() {
   ensureTarifsData();
   try {
     // Sécurité anti-perte : chaque saisie dans Tarifs est marquée comme plus récente
-    // que la dernière version Drive. Sans cela, le rafraîchissement automatique au
-    // retour sur l'onglet pouvait recharger l'ancien fichier Drive et effacer la saisie.
+    // que la dernière version Cloudflare. Sans cela, le rafraîchissement automatique au
+    // retour sur l'onglet pouvait recharger l'ancien fichier Cloudflare et effacer la saisie.
     data.tarifs.updatedAt = Date.now();
     tarifsLastLocalEditAt = data.tarifs.updatedAt;
     tarifsLocalDirty = true;
@@ -5115,14 +5115,14 @@ async function saveFromPortalGlobal(options = {}) {
         driveSyncSaved = await saveSyncToDrive(false);
       } catch (error) {
         driveError = error?.message || String(error);
-        console.error('Sauvegarde Drive Gestion commerciale impossible.', error);
+        console.error('Sauvegarde Cloudflare Gestion commerciale impossible.', error);
       }
 
       try {
         exportedDocuments = await exportAvailableDocumentsToDrive(false);
       } catch (error) {
         exportError = error?.message || String(error);
-        console.error('Export documents Drive impossible.', error);
+        console.error('Export documents Cloudflare impossible.', error);
       }
     }
 
@@ -5137,7 +5137,7 @@ async function saveFromPortalGlobal(options = {}) {
       exportedDocuments,
       exportedDocumentsCount: exportedDocuments.length,
       alertsIntercepted: interceptedAlerts.length,
-      warnings: [driveError && `Drive sync: ${driveError}`, exportError && `Export documents: ${exportError}`].filter(Boolean)
+      warnings: [driveError && `Cloudflare sync: ${driveError}`, exportError && `Export documents: ${exportError}`].filter(Boolean)
     };
   } finally {
     if (options?.silent) window.alert = originalAlert;
@@ -5369,13 +5369,13 @@ window.addEventListener('load', async () => {
       type: 'BASTCOMPTA_DRIVE_STATUS_REQUEST'
     }, window.location.origin);
   } catch (error) {
-    console.error('Impossible de demander le statut Drive au portail.', error);
+    console.error('Impossible de demander le statut Cloudflare au portail.', error);
   }
 });
 
 window.addEventListener('focus', async () => {
   // Lorsqu'une facture est en cours d'ouverture depuis la comptabilité,
-  // ne lance pas en parallèle une synchronisation Drive et un second rendu complet.
+  // ne lance pas en parallèle une synchronisation Cloudflare et un second rendu complet.
   if (isOpeningInvoiceFromAccounting) return;
 
   try {

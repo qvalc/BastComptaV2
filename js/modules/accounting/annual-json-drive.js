@@ -1,4 +1,4 @@
-/* BastCompta - service Google Drive des fichiers JSON comptables annuels. */
+/* BastCompta - service Cloudflare des fichiers JSON comptables annuels. */
 (function (global) {
   'use strict';
 

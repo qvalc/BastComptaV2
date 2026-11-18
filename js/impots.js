@@ -660,7 +660,7 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
       const loaded = await loadFiscalComptaFromDrive();
       if (loaded) refreshAll(false);
     } catch (e) {
-      console.warn('Impossible de charger automatiquement la comptabilité fiscale depuis Drive :', e);
+      console.warn('Impossible de charger automatiquement la comptabilité fiscale depuis Cloudflare :', e);
     }
   });
 })();

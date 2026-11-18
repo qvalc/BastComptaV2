@@ -359,7 +359,7 @@ async function saveJsonToDrive(fileName, payload, showErrors = true) {
     return true;
   } catch (error) {
     console.error(error);
-    if (showErrors) showToast('Sauvegarde Drive impossible.');
+    if (showErrors) showToast('Sauvegarde Cloudflare impossible.');
     return false;
   }
 }
@@ -447,7 +447,7 @@ async function deleteClientPhoto(client, photoId) {
     const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.driveFileId)}`, {
       method: 'DELETE', headers: { Authorization: 'Bearer ' + state.drive.token }
     });
-    if (!response.ok && response.status !== 404) throw new Error('Suppression Drive impossible.');
+    if (!response.ok && response.status !== 404) throw new Error('Suppression Cloudflare impossible.');
     const url = photoObjectUrls.get(photo.driveFileId);
     if (url) URL.revokeObjectURL(url);
     photoObjectUrls.delete(photo.driveFileId);
@@ -471,7 +471,7 @@ function renderClientPhotos(client) {
       <button class="secondary-button" type="button" data-action="choose-client-photo">🖼️ Galerie</button>
       <input id="clientCameraInput" class="hidden" type="file" accept="image/*" capture="environment">
       <input id="clientGalleryInput" class="hidden" type="file" accept="image/*" multiple>
-    </div>` : `<div class="premium-lock"><strong>Cloudflare requis</strong><span>Connecte Cloudflare dans le menu du compte pour prendre et conserver les photos de ce client.</span><button class="mini-btn" type="button" data-action="connect-drive-for-photos">Connecter Drive</button></div>`}
+    </div>` : `<div class="premium-lock"><strong>Cloudflare requis</strong><span>Connecte Cloudflare dans le menu du compte pour prendre et conserver les photos de ce client.</span><button class="mini-btn" type="button" data-action="connect-drive-for-photos">Connecter Cloudflare</button></div>`}
     <div id="clientPhotoProgress" class="photo-progress hidden" aria-live="polite">Préparation et envoi de la photo…</div>
     <div class="client-photo-grid">${photos.length ? photos.map(photo => `<article class="client-photo-card">
       <button class="client-photo-open" type="button" data-action="open-client-photo" data-id="${escapeHtml(photo.id)}" aria-label="Ouvrir la photo">
@@ -493,7 +493,7 @@ function renderQuotePhotos(draft) {
     ${driveReady ? `<div class="photo-actions">
       <button class="primary-button" type="button" data-action="take-quote-photo">📷 Prendre une photo</button>
       <button class="secondary-button" type="button" data-action="choose-quote-photo">🖼️ Galerie</button>
-    </div>` : `<div class="premium-lock"><strong>Cloudflare requis</strong><span>Connecte Cloudflare pour ajouter des photos à ce devis.</span><button class="mini-btn" type="button" data-action="connect-drive-for-quote-photos">Connecter Drive</button></div>`}
+    </div>` : `<div class="premium-lock"><strong>Cloudflare requis</strong><span>Connecte Cloudflare pour ajouter des photos à ce devis.</span><button class="mini-btn" type="button" data-action="connect-drive-for-quote-photos">Connecter Cloudflare</button></div>`}
     <div id="quotePhotoProgress" class="photo-progress hidden" aria-live="polite">Préparation et envoi de la photo…</div>
     <div class="client-photo-grid">${photos.length ? photos.map(photo => `<article class="client-photo-card">
       <button class="client-photo-open" type="button" data-action="open-quote-photo" data-id="${escapeHtml(photo.id)}" aria-label="Ouvrir la photo">
@@ -569,7 +569,7 @@ async function deleteQuotePhoto(draft, photoId) {
     const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.driveFileId)}`, {
       method: 'DELETE', headers: { Authorization: `Bearer ${state.drive.token}` }
     });
-    if (!response.ok && response.status !== 404) throw new Error('Suppression Drive impossible.');
+    if (!response.ok && response.status !== 404) throw new Error('Suppression Cloudflare impossible.');
     const url = photoObjectUrls.get(photo.driveFileId);
     if (url) URL.revokeObjectURL(url);
     photoObjectUrls.delete(photo.driveFileId);
@@ -633,7 +633,7 @@ async function saveCrmToDrive(showErrors = true) {
   };
   updateSyncLine('Synchronisation Cloudflare…', 'working');
   const ok = await saveJsonToDrive(CRM_DRIVE_FILE, payload, showErrors);
-  updateSyncLine(ok ? 'Synchronisé avec Cloudflare' : 'Données locales — Drive non synchronisé', ok ? 'ok' : 'warning');
+  updateSyncLine(ok ? 'Synchronisé avec Cloudflare' : 'Données locales — Cloudflare non synchronisé', ok ? 'ok' : 'warning');
   return ok;
 }
 
@@ -670,7 +670,7 @@ async function syncFromDrive() {
     return true;
   } catch (error) {
     console.warn(error);
-    updateSyncLine('Données locales — connexion Drive nécessaire', 'warning');
+    updateSyncLine('Données locales — connexion Cloudflare nécessaire', 'warning');
     return false;
   }
 }

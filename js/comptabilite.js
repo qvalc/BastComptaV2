@@ -120,7 +120,7 @@ async function driveFilesList(params, showAlert401 = true) {
     }
 
     if (error?.status === 400 && params?.q) {
-      console.warn('Requête Drive filtrée refusée, repli sur liste complète appDataFolder.', params.q, error);
+      console.warn('Requête Cloudflare filtrée refusée, repli sur liste complète appDataFolder.', params.q, error);
       const fallback = await listDriveFilesDirect({
         spaces: params.spaces || 'appDataFolder',
         pageSize: params.pageSize || 100,
@@ -741,7 +741,7 @@ async function openPurchasePdf(fileId) {
   }
 
   // Ouvrir la fenêtre pendant le clic utilisateur évite le blocage des pop-ups
-  // et donne immédiatement un retour visuel pendant le téléchargement Drive.
+  // et donne immédiatement un retour visuel pendant le téléchargement Cloudflare.
   const previewWindow = window.open('', '_blank');
   if (!previewWindow) {
     alert('Le navigateur a bloqué la fenêtre. Autorise les fenêtres contextuelles pour BastCompta.');
@@ -1088,7 +1088,7 @@ async function loadDriveFiles() {
   } catch (error) {
     console.error(error);
 
-    alert("Impossible de charger la liste des sauvegardes Drive. Vérifie la connexion Cloudflare dans le portail.");
+    alert("Impossible de charger la liste des sauvegardes Cloudflare. Vérifie la connexion Cloudflare dans le portail.");
   }
 }
 
@@ -1367,7 +1367,7 @@ function renderGoogleDrive() {
               <div class="inline-actions" style="margin-top:12px;">
                 <button onclick="importSelectedJsonFromDrive()">Charger dans l’application</button>
                 <button onclick="downloadSelectedJsonFromDrive()">Télécharger vers ce PC${checkedCount ? ` (${checkedCount})` : ''}</button>
-                <button onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Drive</button>
+                <button onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Cloudflare</button>
                 <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer${checkedCount ? ` (${checkedCount})` : ''}</button>
               </div>
 
@@ -1759,7 +1759,7 @@ function totals() {
 
 function setField(path, value) {
   // Les paramètres sont de vraies données métier : signaler la modification
-  // au portail afin que la disquette propose bien une synchronisation Drive.
+  // au portail afin que la disquette propose bien une synchronisation Cloudflare.
   notifyPortalBusinessChange('Paramètre comptable modifié');
   const keys = path.split('.');
   let ref = data;
@@ -2636,7 +2636,7 @@ function renderSettings() {
             <div class="section-head" style="margin-top:20px;">
               <div>
                 <h3>Exercice suivant</h3>
-                <div class="hint">Crée un nouveau fichier JSON pour l'année suivante en reprenant le stock, les immobilisations, les investissements, les paramètres et le résultat reporté. Tu choisis ensuite un téléchargement sur PC ou un envoi direct sur Drive.</div>
+                <div class="hint">Crée un nouveau fichier JSON pour l'année suivante en reprenant le stock, les immobilisations, les investissements, les paramètres et le résultat reporté. Tu choisis ensuite un téléchargement sur PC ou un envoi direct sur Cloudflare.</div>
               </div>
             </div>
             <div class="inline-actions">
@@ -2984,7 +2984,7 @@ async function saveFromPortalGlobal(options = {}) {
         driveSynced = await saveCurrentYearJsonToDrive(false);
       } catch (error) {
         driveError = error?.message || String(error);
-        console.error('Sauvegarde Drive Comptabilité impossible.', error);
+        console.error('Sauvegarde Cloudflare Comptabilité impossible.', error);
       }
     }
 
@@ -2996,7 +2996,7 @@ async function saveFromPortalGlobal(options = {}) {
       drive: !!googleAccessToken && driveSynced,
       chantierSynced,
       alertsIntercepted: interceptedAlerts.length,
-      warnings: [driveError && `Drive sync: ${driveError}`].filter(Boolean)
+      warnings: [driveError && `Cloudflare sync: ${driveError}`].filter(Boolean)
     };
   } finally {
     if (options?.silent) window.alert = originalAlert;
@@ -3034,7 +3034,7 @@ window.addEventListener('load', async () => {
       type: 'BASTCOMPTA_DRIVE_STATUS_REQUEST'
     }, window.location.origin);
   } catch (error) {
-    console.error('Impossible de demander le statut Drive au portail.', error);
+    console.error('Impossible de demander le statut Cloudflare au portail.', error);
   }
 });
 
