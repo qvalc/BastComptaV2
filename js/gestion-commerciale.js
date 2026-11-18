@@ -4077,7 +4077,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
 
     ${!isQuote ? `
       <div class="pay-block">
-        <div class="field" style="margin-bottom:10px;">
+        <div class="field no-print" style="margin-bottom:10px;">
           <label>Montant payé</label>
           <input type="number" step="0.01" value="${num(doc.paidAmount)}" onchange="setDocumentField('${docKey}', 'paidAmount', parseFloat(this.value)||0)">
         </div>
