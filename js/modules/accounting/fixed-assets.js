@@ -52,5 +52,14 @@
     };
   }
 
-  global.BastFixedAssets = Object.freeze({ computedRow, summarize });
+  function reconcile({investments=[],assets=[],currentYear}={}){
+    const calc=global.BastAccountingCalculations,remaining=investments.map(row=>({...row}));
+    const key=row=>[row.date,calc.number(row.amount),Number(row.durationMonths||60)].join('|');
+    const unmatchedAssets=[];
+    for(const row of assets){const index=remaining.findIndex(other=>key(other)===key(row));if(index>=0)remaining.splice(index,1);else unmatchedAssets.push(row);}
+    const active=rows=>rows.map(row=>({...row,amortYear:computedRow(row,currentYear).amortYear})).filter(row=>row.amortYear>0);
+    const values=summarize({investments,assets,currentYear});
+    return {difference:calc.round2(values.assetsYearlyAmort-values.investmentsYearlyAmort),assetsOnly:active(unmatchedAssets),investmentsOnly:active(remaining)};
+  }
+  global.BastFixedAssets = Object.freeze({ computedRow, summarize, reconcile });
 })(globalThis);

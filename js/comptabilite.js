@@ -162,6 +162,7 @@ const defaultData = {
   losses: [],
   km: [],
   privateMovements: [],
+  loans: [],
   vat: {
     declarations: []
   },
@@ -290,12 +291,14 @@ const pageDefs = [
   { key: 'km', label: 'Kilomètres' },
   { key: 'private', label: "Prélèvements de l'exploitant" },
   { key: 'result', label: 'Compte de résultat' },
+  { key: 'loans', label: 'Emprunts' },
   { key: 'balance', label: 'Bilan simplifié' },
   { key: 'vat', label: 'TVA' },
 ];
 
 let data = loadData();
 let activePage = 'dashboard';
+let loanEditor = null;
 let expandedVatDeclarationId = '';
 
 function goToPage(pageKey) {
@@ -1833,10 +1836,12 @@ function renderPages() {
         ${renderVat()}
         ${renderInvestments()}
         ${renderAssets()}
+        ${activePage === 'assets' ? renderAmortizationCheck() : ''}
         ${renderStock()}
         ${renderLosses()}
         ${renderKm()}
         ${renderPrivateMovements()}
+        ${renderLoans()}
         ${renderResult()}
         ${renderBalance()}
         ${renderGoogleDrive()}
@@ -2520,10 +2525,65 @@ function renderResult() {
       `;
 }
 
+
+function startLoanEditor(index = -1) {
+  loanEditor = {index, value: index < 0 ? {id:crypto.randomUUID(),label:'',startDate:'',initialCapital:'',professionalPercent:'',outstandingDate:'',outstandingCapital:'',scheduleConfirmedThrough:'',payments:[]} : structuredClone(data.loans[index])};
+  render();
+}
+function readLoanEditor() {
+  const form=document.getElementById('loanEditorForm');
+  if(!form || !loanEditor)return;
+  const values=new FormData(form),next=loanEditor.value;
+  for(const key of ['label','startDate','initialCapital','professionalPercent','outstandingDate','outstandingCapital','scheduleConfirmedThrough'])next[key]=String(values.get(key) ?? '');
+  next.payments=(next.payments||[]).map((payment,index)=>Object.fromEntries(['date','total','capital','interest','insurance'].map(key=>[key,String(values.get('p'+index+'-'+key) ?? '')])));
+}
+function addLoanPayment() {readLoanEditor();loanEditor.value.payments.push({date:'',total:'',capital:'',interest:'',insurance:''});render();}
+async function saveLoanEditor(event) {
+  event.preventDefault();readLoanEditor();
+  const loan=structuredClone(loanEditor.value);
+  if(!loan.label.trim() || !loan.startDate || BastLoans.amount(loan.initialCapital)===null || BastLoans.amount(loan.professionalPercent)===null || Number(loan.professionalPercent)>100){alert('Renseignez le libellé, la date, le capital initial et la part professionnelle (0 à 100 %).');return;}
+  if(loanEditor.index<0)data.loans.push(loan);else data.loans[loanEditor.index]=loan;
+  loanEditor=null;notifyPortalBusinessChange('Emprunt modifié');
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+  render();
+  // Only accounting files are saved. No purchase/client synchronization here.
+  const synced=googleAccessToken ? await saveCurrentYearJsonToDrive(false) : false;
+  const backup=synced ? await saveSyncToDrive(false) : false;
+  alert(synced&&backup ? 'Emprunt sauvegardé sur Cloudflare.' : 'Emprunt conservé localement. Sauvegarde Cloudflare à confirmer avec la disquette.');
+}
+function renderLoanEditor() {
+  if(!loanEditor)return '';
+  const v=loanEditor.value;
+  const field=(label,key,type='number')=>`<label>${label}<input aria-label="${label}" name="${key}" type="${type}" ${type==='number'?'min="0" step="0.01"':''} value="${escapeAttr(v[key] ?? '')}"></label>`;
+  return `<form id="loanEditorForm" class="card" oninput="readLoanEditor()" onsubmit="saveLoanEditor(event)"><h3>${loanEditor.index<0?'Nouvel emprunt':'Modifier l’emprunt'}</h3>
+    <div class="loan-fields">${field('Libellé de l’emprunt','label','text')}${field('Date de début du prêt','startDate','date')}${field('Capital initial total emprunté','initialCapital')}${field('Part professionnelle (%)','professionalPercent')}</div>
+    <h4>Solde communiqué par la banque (facultatif)</h4><div class="loan-fields">${field('Date du capital restant dû','outstandingDate','date')}${field('Capital restant dû total','outstandingCapital')}</div>
+    <p class="hint">Ce solde doit correspondre à la date du bilan. Sinon, complétez les remboursements et confirmez leur exhaustivité ci-dessous. Un champ vide signifie inconnu, pas zéro.</p>
+    <h4>Remboursements</h4><div style="overflow:auto"><table><thead><tr>${['Date','Mensualité totale','Capital remboursé','Intérêts','Assurance / frais'].map(s=>`<th>${s}</th>`).join('')}</tr></thead><tbody>${(v.payments||[]).map((p,i)=>`<tr>${['date','total','capital','interest','insurance'].map(key=>`<td><input aria-label="${({date:'Date mensualité',total:'Mensualité totale',capital:'Capital mensualité',interest:'Intérêts mensualité',insurance:'Assurance mensualité'})[key]} ${i+1}" type="${key==='date'?'date':'number'}" ${key==='date'?'':'min="0" step="0.01"'} name="p${i}-${key}" value="${escapeAttr(p[key] ?? '')}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <button type="button" onclick="addLoanPayment()">Ajouter une mensualité</button>
+    <div class="loan-fields">${field('Échéancier complet et vérifié jusqu’au','scheduleConfirmedThrough','date')}</div>
+    <p class="hint">Ne confirmez cette date qu’après vérification de toutes les mensualités avec le tableau de remboursement. La V2 ne calcule pas les intérêts manquants.</p>
+    <button type="submit">Enregistrer l’emprunt</button> <button type="button" onclick="loanEditor=null;render()">Annuler</button></form>`;
+}
+function renderLoans() {
+  const t=totals(),loans=t.loanSummary;
+  return `<section class="page ${activePage==='loans'?'active':''}"><div class="card"><div class="section-head"><h2>Emprunts</h2><button type="button" onclick="startLoanEditor()">Ajouter un emprunt</button></div>
+    <label>Date du bilan<input aria-label="Date du bilan" type="date" value="${escapeAttr(loans.asOf)}" onchange="setField('settings.balanceDate',this.value)"></label>
+    <p class="hint">L’actif déjà limité à la part professionnelle n’est pas réduit une seconde fois. Seule la part professionnelle du capital restant dû confirmé est ajoutée au passif. Les mensualités ne sont pas déduites automatiquement de la banque ni reprises automatiquement dans les charges : rapprochez ces mouvements avec vos écritures existantes.</p>
+    ${(data.loans||[]).map((loan,i)=>{const p=loans.positions[i];return `<div class="card"><h3>${escapeHtml(loan.label || 'Emprunt')}</h3><div class="kv"><span>Capital initial total / part professionnelle</span><strong>${loan.initialCapital===''?'À compléter':money(loan.initialCapital)} / ${escapeHtml(loan.professionalPercent ?? '')} %</strong></div><div class="kv"><span>Dette professionnelle au ${escapeHtml(loans.asOf)}</span><strong>${p.complete?money(p.professionalCapital):'À compléter'}</strong></div><p class="hint">${escapeHtml(p.reason)}</p><button type="button" onclick="startLoanEditor(${i})">Modifier l’emprunt</button></div>`;}).join('') || '<p>Aucun emprunt renseigné.</p>'}
+    <div class="kv"><span>Dette professionnelle confirmée</span><strong>${money(loans.confirmedProfessionalDebt)}${loans.incomplete?' + à compléter':''}</strong></div>
+    </div>${renderLoanEditor()}</section>`;
+}
+function renderAmortizationCheck() {
+  const check=BastFixedAssets.reconcile({investments:data.investments,assets:data.assets,currentYear:parseInt(data.company.period,10)||new Date().getFullYear()});
+  if(Math.abs(check.difference)<0.01)return '';
+  return `<div class="card"><h3>Rapprochement des amortissements</h3><p>Écart entre la liste des immobilisations et les investissements repris au résultat : <strong>${money(check.difference)}</strong>.</p><p class="hint">Rapprochement indicatif par date, montant et durée. Vérifiez si les éléments ci-dessous sont déjà comptabilisés dans les achats avant de modifier les dotations. Aucun amortissement n’est corrigé automatiquement.</p><ul>${check.assetsOnly.map(row=>`<li>${escapeHtml(row.label||row.description||'Sans libellé')} : ${money(row.amortYear)}</li>`).join('')}</ul>${check.investmentsOnly.length?'<p>Certains investissements sont également absents de la liste des immobilisations.</p>':''}</div>`;
+}
 function renderBalance() {
   const t = totals();
   return `
         <section class="page two-cols ${activePage === 'balance' ? 'active' : ''}">
+          <p class="hint" style="grid-column:1/-1">Situation au ${escapeHtml(t.loanSummary.asOf)}.${t.loanSummary.incomplete ? ` <strong>Passif partiel : ${t.loanSummary.incomplete} emprunt(s) à compléter. L’écart est provisoire.</strong>` : ""}</p>
           <div class="card">
             <div class="section-head"><h2>Bilan simplifié</h2></div>
             <div class="kv"><span>Immobilisations nettes</span><span>${money(t.netFixedAssets)}</span></div>
@@ -2539,7 +2599,8 @@ function renderBalance() {
             <div class="kv"><span>Prélèvements de l'exploitant</span><span>${money(t.ownerAccountBalance)}</span></div>
             <div class="kv"><span>Résultat de l'exercice</span><span>${money(t.estimatedProfit)}</span></div>
             <div class="kv"><span>TVA à payer</span><span>${money(t.payableVat)}</span></div>
-            <div class="kv"><span><strong>Total passif</strong></span><span><strong>${money(t.liabilitiesSide)}</strong></span></div>
+            <div class="kv"><span>Emprunts professionnels confirmés</span><span>${money(t.loanSummary.confirmedProfessionalDebt)}${t.loanSummary.incomplete ? " + à compléter" : ""}</span></div>
+            <div class="kv"><span><strong>${t.loanSummary.incomplete ? "Total passif connu (partiel)" : "Total passif"}</strong></span><span><strong>${money(t.liabilitiesSide)}</strong></span></div>
             <div class="kv"><span>Écart</span><span class="${Math.abs(t.assetsSide - t.liabilitiesSide) < 0.01 ? 'status-good' : 'status-bad'}">${money(t.assetsSide - t.liabilitiesSide)}</span></div>
           </div>
         </section>
@@ -2817,7 +2878,9 @@ function buildPrintReportHtml() {
     ["Prélèvements de l'exploitant", money(t.ownerAccountBalance)],
     ['Résultat de l’exercice', money(t.estimatedProfit)],
     ['TVA à payer', money(t.payableVat)],
-    ['Total passif', money(t.liabilitiesSide)]
+    ['Emprunts professionnels confirmés', money(t.loanSummary.confirmedProfessionalDebt)],
+    ['Emprunts à compléter', String(t.loanSummary.incomplete)],
+    [t.loanSummary.incomplete ? 'Total passif connu (partiel)' : 'Total passif', money(t.liabilitiesSide)]
   ])}
 
     ${BastAccountingReportTemplate.keyValueGridSection('Suivi TVA',

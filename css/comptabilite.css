@@ -859,3 +859,5 @@ body.bast-embedded .page.active {
 .km-table-wrap table { min-width: 700px; }
 .km-total { padding-top: 18px; margin-top: 20px; border-top: 1px solid #d8e0ed; }
 @media (max-width: 760px) { .km-fields { grid-template-columns: 1fr; } .km-group summary { flex-wrap: wrap; } }
+
+.loan-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:14px 0}.loan-fields label{display:flex;flex-direction:column;gap:6px}

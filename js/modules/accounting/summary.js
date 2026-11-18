@@ -29,6 +29,8 @@
       privateMovements: data.privateMovements || []
     });
     const ownerAccountCarryover = calc.number(settings.ownerAccountCarryover);
+    const loanSummary = global.BastLoans?.summarize(data.loans || [], global.BastLoans.balanceDate(currentYear, settings.balanceDate))
+      || {positions:[],incomplete:0,confirmedProfessionalDebt:0,asOf:''};
     const vatPosition = global.BastVatDeclaration.openPosition({
       vatLedger,
       initialCredit: calc.number(settings.vatCarryover),
@@ -56,11 +58,13 @@
       cashBalance: settings.cashBalance,
       capitalStart: settings.capitalStart,
       retainedEarnings: settings.retainedEarnings,
+      professionalLoanDebt: loanSummary.confirmedProfessionalDebt,
       openVatCredit: vatPosition.openVatCredit,
       openVatDue: vatPosition.openVatDue
     });
 
     return {
+      loanSummary,
       ...journal,
       investmentComputed: fixedAssets.investmentComputed,
       assetsComputed: fixedAssets.assetsComputed,

@@ -22,7 +22,7 @@
     const liquidities = n(input.bankBalance) + n(input.cashBalance);
     const receivableVat = n(input.openVatCredit), payableVat = n(input.openVatDue);
     const assetsSide = netFixedAssets + n(input.stockValue) + receivableVat + liquidities;
-    const liabilitiesSide = n(input.capitalStart) + n(input.retainedEarnings) + ownerAccountBalance + estimatedProfit + payableVat;
+    const liabilitiesSide = n(input.capitalStart) + n(input.retainedEarnings) + ownerAccountBalance + estimatedProfit + payableVat + n(input.professionalLoanDebt);
     return { privateMovementsNet, ownerAccountBalance, totalCharges, estimatedProfit,
       deductibleSocialContributions, excessSocialRefund, socialContributionRecovered, socialContributionDue,
       taxableEstimatedProfit: estimatedProfit, netFixedAssets, liquidities, receivableVat, payableVat,

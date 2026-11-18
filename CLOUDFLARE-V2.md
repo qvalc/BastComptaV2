@@ -56,3 +56,11 @@ L’adresse publique demandée reste `https://qvalc.github.io/BastComptaV2/`. De
 
 
 Le menu « Fichiers Cloudflare » utilise le catalogue privé de la V2 pour les catégories, la recherche, les aperçus et les téléchargements. Les réglages IPP récupérés séparément sont conservés dans `bastcompta-impots-ipp-settings.json` ; la connexion peut les reprendre si la clé fiscale locale est absente, sans remplacer une saisie locale existante.
+
+## Suivi des emprunts
+
+L’onglet Comptabilité → Emprunts conserve les prêts et leurs mensualités dans la propriété `loans` des fichiers comptables V2 existants, sans nouvelle route ni accès Drive. Les champs inconnus restent vides. Un solde bancaire confirmé exactement à la date du bilan, ou un échéancier complet explicitement confirmé jusqu’à cette date et correctement ventilé, permet de calculer la dette professionnelle. Le taux professionnel est appliqué une seule fois au capital restant dû total, jamais une seconde fois à la valeur d’actif déjà professionnelle.
+
+Les intérêts, assurances et mensualités ne sont ni déduits automatiquement de la banque ni ajoutés automatiquement aux charges. Il faut rapprocher ces paiements avec les écritures déjà saisies. Les prêts incomplets sont signalés au bilan et dans le rapport ; le total passif connu reste partiel. Le changement d’exercice conserve les historiques de prêt, mais requiert une nouvelle confirmation de solde à la date suivante.
+
+Le rapprochement des amortissements compare les deux listes par date, montant et durée sans les modifier. La différence observée de 109,42 € correspond aux quatre outils du 15 juillet 2026 (38,85 + 19,91 + 45,02 + 5,64), déjà comptabilisés dans les achats Braconnier en frais généraux. Elle ne doit pas être ajoutée automatiquement aux charges d’amortissement.

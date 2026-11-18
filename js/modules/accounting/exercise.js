@@ -48,7 +48,9 @@
     nextData.stock = clone(Array.isArray(currentData.stock) ? currentData.stock : []);
     nextData.assets = clone(Array.isArray(currentData.assets) ? currentData.assets : []);
     nextData.investments = clone(Array.isArray(currentData.investments) ? currentData.investments : []);
+    nextData.loans = clone(Array.isArray(currentData.loans) ? currentData.loans : []);
     nextData.settings = settings;
+    nextData.settings.balanceDate = '';
     nextData.settings.retainedEarnings = calc.round2(calc.number(settings.retainedEarnings) + calc.number(totals.estimatedProfit));
     nextData.settings.vatCarryover = Math.max(0, calc.round2(calc.number(totals.receivableVat)));
     nextData.settings.ownerAccountCarryover = calc.round2(calc.number(totals.ownerAccountBalance));
