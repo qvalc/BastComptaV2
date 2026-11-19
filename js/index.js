@@ -572,7 +572,12 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
   ].forEach(({ tab, frame }) => {
     if (!frame) return;
 
-    const targetSrc = frame === terrainFrame ? terrainSessionUrl(frame.dataset.src || '', window.location.href) : (frame.dataset.src || '');
+    let targetSrc = frame === terrainFrame ? terrainSessionUrl(frame.dataset.src || '', window.location.href) : (frame.dataset.src || '');
+    if (targetSrc && (frame === devisFrame || frame === comptaFrame)) {
+      const versioned = new URL(targetSrc, window.location.href);
+      versioned.searchParams.set('v', '20261119-invoice-preview');
+      targetSrc = versioned.href;
+    }
     const canLoad = hasModuleAccess(tab, subscription);
 
     if (!canLoad) {
