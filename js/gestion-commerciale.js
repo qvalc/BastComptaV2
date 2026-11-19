@@ -1241,6 +1241,14 @@ function getInvoiceAccountingRowsForComptabilite() {
 
 window.getInvoiceAccountingRowsForComptabilite = getInvoiceAccountingRowsForComptabilite;
 
+async function archiveInvoiceForAccounting(invoiceNumber) {
+  const expected = normalizeInvoiceLookupValue(invoiceNumber);
+  if (!expected || normalizeInvoiceLookupValue(data.invoice?.documentNumber) !== expected) return null;
+  return await exportDocTypeToDrive('invoice', false);
+}
+window.archiveInvoiceForAccounting = archiveInvoiceForAccounting;
+
+
 function sendInvoiceToAccountingFromIframe() {
   try {
     if (window.parent && window.parent !== window) {
@@ -3193,6 +3201,13 @@ async function openInvoicePreviewByNumberFromDrive(invoiceNumber, preferredFileI
   try {
     const normalized = String(invoiceNumber || '').trim();
     const file = await findInvoiceDriveFileByNumber(normalized, preferredFileId);
+    // Une facture déjà transférée peut encore être le document courant sans archive séparée.
+    if (!file && normalizeInvoiceLookupValue(data.invoice?.documentNumber) === normalizeInvoiceLookupValue(normalized)) {
+      activePage = 'invoice';
+      renderInvoiceFirst();
+      isOpeningInvoiceFromAccounting = false;
+      return true;
+    }
     if (!file) {
       isOpeningInvoiceFromAccounting = false;
       alert(`Aucune facture trouvée sur Cloudflare pour le numéro ${normalized}.`);

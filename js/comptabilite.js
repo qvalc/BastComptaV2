@@ -625,12 +625,6 @@ async function openSalesInvoicePreview(invoiceNumber) {
     await findInvoiceDriveFileForNumber(normalized, true);
   }
 
-  if (!getInvoiceDriveFileForNumber(normalized)) {
-    alert(`Aucune facture trouvée dans Cloudflare pour le numéro ${normalized}.`);
-    render();
-    return;
-  }
-
   const invoiceFile = getInvoiceDriveFileForNumber(normalized);
   const opener = window.parent?.openInvoicePrintPreviewFromAccounting;
   if (typeof opener === 'function') {

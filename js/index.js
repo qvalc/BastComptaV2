@@ -1214,6 +1214,14 @@ async function sendInvoiceToAccounting() {
 
   let result;
   try {
+    if (action !== 'cancel') {
+      const archiveInvoice = getFrameApi(devisFrame, 'archiveInvoiceForAccounting');
+      const archived = archiveInvoice && await archiveInvoice(payload.invoiceNumber);
+      if (!archived?.id) {
+        alert('Envoi interrompu : la facture doit être enregistrée sur Cloudflare pour permettre son aperçu. Aucune ligne comptable n’a été importée.');
+        return;
+      }
+    }
     result = await importRows(payload);
   } catch (error) {
     console.error(error);
